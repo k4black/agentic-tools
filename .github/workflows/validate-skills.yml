@@ -1,0 +1,25 @@
+name: validate-skills
+
+on:
+  push:
+    branches: [main]
+    paths: ['skills/**']
+  pull_request:
+    paths: ['skills/**']
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate every skill against the agentskills.io spec
+        run: |
+          set -e
+          for skill in skills/*/; do
+            echo "::group::$skill"
+            npx --yes skills-ref validate "$skill"
+            echo "::endgroup::"
+          done
