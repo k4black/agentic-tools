@@ -45,9 +45,15 @@ install.sh         the idempotent bootstrap
 | `critique-loop` | Cross-model adversarial review (Codex/Cursor navigator), plan + code flows |
 | `domain-modeling` | Maintain a project's domain model / ubiquitous language / ADRs |
 | `grill-me` | Relentless interview to stress-test a plan until shared understanding |
+| `handoff` | Compact the current conversation into a handoff doc for the next session |
+| `improve-codebase-architecture` | Scan for module-deepening opportunities, visual HTML report, grill through picks |
+| `tdd` | Test-driven development: red-green-refactor with integration-first tests |
 
 Skills follow the [Agent Skills spec](https://agentskills.io/specification) (`SKILL.md` + optional
-`scripts/`, `references/`), validated in CI.
+`scripts/`, `references/`, `agents/openai.yaml` for Codex metadata), validated in CI
+(`scripts/validate-skills.sh`).
 
 Credits: `babysit-pr` and `critique-loop` are adapted from
-[gzaripov/agent-skills](https://github.com/gzaripov/agent-skills) (MIT).
+[gzaripov/agent-skills](https://github.com/gzaripov/agent-skills) (MIT); `handoff`,
+`improve-codebase-architecture`, and `tdd` from
+[mattpocock/skills](https://github.com/mattpocock/skills) (MIT).

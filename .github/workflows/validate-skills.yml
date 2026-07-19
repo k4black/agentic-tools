@@ -16,10 +16,4 @@ jobs:
         with:
           node-version: 22
       - name: Validate every skill against the agentskills.io spec
-        run: |
-          set -e
-          for skill in skills/*/; do
-            echo "::group::$skill"
-            npx --yes skills-ref@0.1.5 validate "$skill"
-            echo "::endgroup::"
-          done
+        run: ./scripts/validate-skills.sh

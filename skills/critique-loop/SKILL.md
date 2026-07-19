@@ -4,6 +4,7 @@ description: Use when the user wants cross-model adversarial review — "critiqu
 license: MIT
 compatibility: Requires either Codex CLI (`codex`, authenticated) or Cursor CLI (`cursor-agent`, Jan 2026+ release with `--mode plan` support, authenticated). Run from inside a git repository, on a feature branch (not `main`/`master`).
 allowed-tools: Bash(codex exec *) Bash(codex exec resume *) Bash(cursor-agent *) Bash(git add *) Bash(git commit *) Bash(git status *) Bash(git diff *) Bash(git log *) Bash(git rev-parse *) Bash(git branch --show-current) Bash(mkdir -p .critique-loop) Bash(cat .critique-loop/*) Bash(grep -oE *) Bash(tee .critique-loop/*)
+argument-hint: "Task to drive, or empty to review the current diff"
 ---
 
 Cross-model critique loop: Claude drives, a second model (the **navigator**) adversarially reviews. The same navigator session persists across rounds so it retains context. Two flows:

@@ -1,6 +1,7 @@
 ---
 name: anki-connect
 description: Use when the user invokes /anki-connect, asks to create or look up Anki flashcards, copy cards between decks, or notices something worth remembering long-term (a concept, gotcha, or vocab from a lesson).
+argument-hint: "What to add or look up"
 ---
 
 # Anki-Connect

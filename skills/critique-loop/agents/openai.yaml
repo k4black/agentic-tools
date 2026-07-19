@@ -1,0 +1,3 @@
+interface:
+  display_name: "Critique Loop"
+  short_description: "Cross-model adversarial review"
