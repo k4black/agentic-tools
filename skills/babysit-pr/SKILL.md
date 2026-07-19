@@ -51,6 +51,7 @@ query($owner:String!,$repo:String!,$pr:Int!){
   repository(owner:$owner,name:$repo){
     pullRequest(number:$pr){
       reviewThreads(first:100){
+        pageInfo{hasNextPage endCursor}
         nodes{
           id isResolved isOutdated path line
           comments(first:50){nodes{databaseId author{login} body url}}
@@ -61,7 +62,7 @@ query($owner:String!,$repo:String!,$pr:Int!){
 }'
 ```
 
-If the PR has more than 100 threads (or 50 comments in one thread), page with GraphQL cursors — the counts above are first-page sizes, not the guarantee.
+If `pageInfo.hasNextPage` is true (or a thread has 50+ comments), keep paging with `after: <endCursor>` — the counts above are first-page sizes, not the guarantee.
 
 A thread needs attention when `isResolved` is false and it was **started by a bot** (first comment's author login ends in `[bot]`, or is a known reviewer bot) — a later human reply does not make the thread handled; only resolving does. For each such thread:
 
@@ -85,7 +86,7 @@ Push any fixes before proceeding.
 
 ### Step 2: Check CI status
 
-Run `gh pr checks --required` (required checks gate the merge; also glance at `gh pr checks` for optional failures worth mentioning in the summary, but don't loop on them).
+Run `gh pr checks --required` (required checks gate the merge; also glance at `gh pr checks` for optional failures worth mentioning in the summary, but don't loop on them). If the repo has no required checks configured, `--required` errors — fall back to `gh pr checks` and treat all checks as gating.
 
 - **All passing** → Phase 2.
 - **Any pending / in-progress** → Step 3.
@@ -125,7 +126,7 @@ Poll for a bounded window (default ~10 minutes after the last push, checking eve
 
 Re-run `gh pr checks --required` and `gh pr view --json mergeable,mergeStateStatus` once more — intermediate commits may have kicked off a new run, and the base may have moved.
 
-- **All green, `MERGEABLE`, and `mergeStateStatus` is `CLEAN`** (or `UNSTABLE` with only optional checks failing — note them) → summary report. Done.
+- **All green, `MERGEABLE`, and `mergeStateStatus` is `CLEAN` or `HAS_HOOKS`** (or `UNSTABLE` with only optional checks failing — note them) → summary report. Done.
 - **Anything failing/pending** → back to Step 2.
 - **`BEHIND` / conflicting with base** → back to Step 0.
 - **`BLOCKED`** → checks are green but merge requirements (e.g. required reviews) need a human — report it.

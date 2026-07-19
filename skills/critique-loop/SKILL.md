@@ -84,7 +84,7 @@ cursor-agent -p --trust \
 
 **RESUME-SESSION**: identical invocation (the chat already exists).
 
-After either START-SESSION, verify `.critique-loop/<SLUG>.session-id` is non-empty before continuing. If empty, surface the raw output to the user and stop.
+After either START-SESSION: if the command exited non-zero, stop and surface the error (do not proceed to session-id extraction). Then verify `.critique-loop/<SLUG>.session-id` is non-empty before continuing. If empty, surface the raw output to the user and stop.
 
 ## Prerequisites
 
@@ -114,7 +114,7 @@ Rules:
    ```
 
    Mark it resolved in your log and ignore it in all future rounds.
-4. **Disagreement you can't resolve** — if you disagree with an ask and it isn't worth a user interruption, leave a `TODO(critique-loop): <why skipped>` comment at the site (file's native comment syntax) and say so in the driver response. Product/architecture disagreements still go to the user (Step 6 classification).
+4. **Disagreement you can't resolve** — if you disagree with an ask and it isn't worth a user interruption, leave a `TODO(critique-loop): <why skipped>` comment at the site (file's native comment syntax; for commentless formats like JSON, record it in the driver-response notes instead) and say so in the driver response. Product/architecture disagreements still go to the user (Step 6 classification).
 5. **Stuck detection** — before each new round, check: same asks repeating 3+ rounds? all remaining asks oscillating/skipped? ask count not shrinking despite fixes? If any is true, exit the loop early and report why instead of burning rounds.
 
 ## Phase 1: Draft the plan
@@ -130,6 +130,7 @@ mkdir -p .critique-loop
 
 if ! grep -qxE '\.critique-loop/?' .gitignore 2>/dev/null; then
   echo ".critique-loop/" >> .gitignore
+  git add .gitignore   # required when .gitignore is newly created (untracked)
   # pathspec form: commits ONLY .gitignore, never sweeps in other staged work
   git commit -m "chore: gitignore .critique-loop artifacts" -- .gitignore
 fi
@@ -370,7 +371,7 @@ Other shapes: `HEAD` for uncommitted working-tree changes (navigator reads `git 
 
 **Range integrity across rounds** — the recorded range must keep covering the work as fix commits land:
 
-- The recorded `BASE` SHA is fixed; re-reviews always diff `${BASE}..HEAD` so later fix commits are included. Never re-record a range that would exclude them (`<sha1>..<sha2>` becomes `<sha1>..HEAD` after the first fix round).
+- The recorded `BASE` SHA is fixed; re-reviews always diff `${BASE}..HEAD` so later fix commits are included. Never re-record a range that would exclude them (`<sha1>..<sha2>` becomes `<sha1>..HEAD` after the first fix round — if unrelated commits might land on the branch mid-loop, name the fix SHAs to the navigator explicitly instead).
 - If reviewing uncommitted changes (`HEAD` shape): untracked files are invisible to `git diff HEAD` — tell the navigator to also check `git status --porcelain` and read new files; and once you commit fixes, switch the range to `<original-HEAD>..HEAD` plus the dirty tree, or the re-review sees an empty diff and false-approves.
 
 ### R3: Navigator reviews the diff
