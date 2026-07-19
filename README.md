@@ -50,13 +50,14 @@ install.sh         the idempotent bootstrap
 
 | Skill | Purpose |
 |---|---|
+| `agents-md` | Create/audit/compress a project's AGENTS.md/CLAUDE.md against the canonical structure (user-triggered) |
 | `anki-connect` | Create/find/update Anki flashcards via AnkiConnect |
 | `apple-notes` | Read/reorganize Apple Notes without stripping hyperlinks |
 | `apple-reminders` | Add/view/complete Apple Reminders |
 | `babysit-pr` | Drive a PR to merge-ready: fix CI, resolve bot review threads (gh-only) |
 | `critique-loop` | Cross-model adversarial review (Codex/Cursor navigator), plan + code flows |
 | `design-doc` | Research → grill → write `docs/design/yyyy-MM-dd-<slug>.md` feature design doc |
-| `domain-modeling` | Canonical AGENTS.md/CLAUDE.md format + maintain the project's Terminology (domain glossary) |
+| `domain-modeling` | Maintain the project's Terminology section (domain glossary) in AGENTS.md |
 | `grill-me` | Relentless interview to stress-test a plan until shared understanding |
 | `handoff` | Compact the current conversation into a handoff doc for the next session |
 | `improve-codebase-architecture` | Scan for module-deepening opportunities, visual HTML report, grill through picks |
@@ -74,7 +75,7 @@ agreements to check when editing any skill:
 | File (in the target project) | Owner / consumers |
 |---|---|
 | `docs/design/yyyy-MM-dd-<slug>.md` | Written by `design-doc` (skill or ralph preset); input to `implement`/`tdd` loops. **Decisions are locked** — implementers don't re-open them, changes go through the doc first. Also the home for standalone hard-to-reverse decisions (no separate ADR system). Monorepos: may live per sub-project (`<sub>/docs/design/`) |
-| `CLAUDE.md` / `AGENTS.md` | Agent instructions in the `domain-modeling` skill's canonical format, including the **Terminology** section (domain glossary — vocabulary source for `design-doc`, `test-driven-dev`, `improve-codebase-architecture`). Global layer comes from `GLOBAL-AGENTS.md` symlinks; read at session start, kept updated. Monorepos: one per sub-project, nearest wins |
+| `CLAUDE.md` / `AGENTS.md` | Agent instructions in the `agents-md` skill's canonical structure (CLAUDE.md is a symlink), including the **Terminology** section (glossary, maintained by `domain-modeling` — vocabulary source for `design-doc`, `test-driven-dev`, `improve-codebase-architecture`). Global layer comes from `GLOBAL-AGENTS.md` symlinks; read at session start, kept updated. Monorepos: one per sub-project, nearest wins |
 | `README.md`, `TODO.md` / `PROGRESS.md` | Orientation docs — read before exploring code, updated in place as part of any change (new service → README, progress → TODO/PROGRESS) |
 | `.critique-loop/`, `.ralph/` | Gitignored working state (sessions, reviews, specs, memories) — never committed, never part of a PR |
 | `CODEASSIST.md` | Per-repo steering read by ralph's `builtin:code-assist` Builder |

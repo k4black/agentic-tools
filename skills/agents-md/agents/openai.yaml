@@ -1,0 +1,5 @@
+interface:
+  display_name: "AGENTS.md Maintenance"
+  short_description: "Create, audit, and compress project agent docs"
+policy:
+  allow_implicit_invocation: false

@@ -1,54 +1,17 @@
 ---
 name: domain-modeling
-description: Own the project's agent docs and domain language. Use when creating or restructuring an AGENTS.md/CLAUDE.md, when the user wants to pin down domain terminology, or when another skill needs the project glossary maintained.
+description: Maintain the project's domain language. Use when the user wants to pin down domain terminology, when terms are fuzzy or conflicting during design, or when another skill needs the project glossary maintained.
 ---
 
-# Domain Modeling & Agent Docs
+# Domain Modeling
 
-Two jobs, one file: the canonical **AGENTS.md/CLAUDE.md format** below, and the
-*active* discipline of maintaining its **Terminology** section — challenging
-terms, inventing edge-case scenarios, writing the glossary down the moment it
-crystallises. (Merely *reading* the Terminology section for vocabulary is not
-this skill; use it when changing the docs or the model.)
-
-## Canonical AGENTS.md / CLAUDE.md format
-
-One file per project — and per sub-project in monorepos (colocated, e.g.
-`services/api/AGENTS.md`; agents read the nearest file walking up, all levels
-are additive). `CLAUDE.md` is a symlink to `AGENTS.md` (`ln -s AGENTS.md CLAUDE.md`). Target well
-under ~200 lines per file; depth is delegated to per-area READMEs and dated
-`docs/design/` docs (which may also live per sub-project: `<sub>/docs/design/`).
-
-```
-repo/
-├── AGENTS.md            # this format; CLAUDE.md -> AGENTS.md symlink
-├── docs/design/         # dated design docs (cross-cutting)
-├── services/api/
-│   ├── AGENTS.md        # sub-project file, same format, own Terminology
-│   └── docs/design/
-└── apps/web/
-    └── AGENTS.md
-```
-
-```markdown
-# <project> — <one-liner>. Full architecture/setup → README.md
-
-## Project in one glance      ← TLDR: purpose, stack, build system
-## Where things live          ← TABLES (path | one-line purpose), never prose
-                                paragraphs; point to per-area READMEs
-## First-time setup           ← only if non-obvious
-## Commands                   ← copy-paste-ready; wrong-vs-right variants
-## Core rules                 ← numbered, few, non-overlapping
-## Code style                 ← only deviations from defaults; "X, NOT Y" form
-## Testing / Making a PR      ← short
-## Terminology                ← the domain glossary (format below)
-## Gotchas                    ← numbered, symptom → cause → fix, 1–3 lines,
-                                ends with "add new gotchas here" self-maintenance
-```
-
-Content rules: only what an agent can't derive from the code (pitfalls,
-rationale, non-default conventions); no changelogs, no file-by-file tours, no
-generic best practices. Test for every line: *would removing it cause mistakes?*
+The *active* discipline of maintaining the **Terminology** section of the
+project's AGENTS.md/CLAUDE.md — challenging terms, inventing edge-case
+scenarios, writing the glossary down the moment it crystallises. (Merely
+*reading* Terminology for vocabulary is not this skill; use it when changing
+the model. The agent-docs file itself — structure, creation, cleanup — is the
+`agents-md` skill's job; in monorepos the glossary lives in the *nearest*
+AGENTS.md.)
 
 ## Terminology section format
 
