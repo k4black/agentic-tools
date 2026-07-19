@@ -11,7 +11,7 @@ Surface architectural friction and propose **deepening opportunities** — refac
 This command is _informed_ by the project's domain model and built on a shared design vocabulary:
 
 - Use this architecture vocabulary exactly in every suggestion: **module**, **interface**, **depth**, **seam**, **adapter**, **leverage**, **locality** — and these principles: the deletion test, "the interface is the test surface", "one adapter = hypothetical seam, two = real". Don't drift into "component," "service," "API," or "boundary."
-- The domain language in `CONTEXT.md` gives names to good seams; ADRs in `docs/adr/` record decisions this command should not re-litigate.
+- The domain language in the Terminology section of AGENTS.md/CLAUDE.md gives names to good seams; locked Decisions in `docs/design/` record choices this command should not re-litigate.
 
 ## Process
 
@@ -22,7 +22,7 @@ This command is _informed_ by the project's domain model and built on a shared d
 - If the user named a direction — a module, a subsystem, a pain point — take it, and skip the inference below.
 - Otherwise, walk back a good stretch of the commit history (`git log --oneline`) to find the codebase's hot spots — the files and areas that keep coming up — and let those paths pull your attention first. If the changes are scattered with no clear hot spot, widen the net.
 
-Read the project's domain glossary (`CONTEXT.md`) and any ADRs in the area you're touching first.
+Read the project's Terminology section (AGENTS.md/CLAUDE.md) and any `docs/design/` decisions for the area you're touching first.
 
 Then use the Agent tool with `subagent_type=Explore` to walk the codebase. Don't follow rigid heuristics — explore organically and note where you experience friction:
 
@@ -51,9 +51,9 @@ For each candidate, render a card with:
 
 End the report with a **Top recommendation** section: which candidate you'd tackle first and why.
 
-**Use CONTEXT.md vocabulary for the domain, and the architecture vocabulary above for the architecture.** If `CONTEXT.md` defines "Order," talk about "the Order intake module" — not "the FooBarHandler," and not "the Order service."
+**Use the Terminology section's vocabulary for the domain, and the architecture vocabulary above for the architecture.** If Terminology defines "Order," talk about "the Order intake module" — not "the FooBarHandler," and not "the Order service."
 
-**ADR conflicts**: if a candidate contradicts an existing ADR, only surface it when the friction is real enough to warrant revisiting the ADR. Mark it clearly in the card (e.g. a warning callout: _"contradicts ADR-0007 — but worth reopening because…"_). Don't list every theoretical refactor an ADR forbids.
+**Decision conflicts**: if a candidate contradicts a locked Decision in `docs/design/`, only surface it when the friction is real enough to warrant reopening that doc. Mark it clearly in the card (a warning callout: _"contradicts docs/design/2026-01-10-x.md — but worth reopening because…"_). Don't list every theoretical refactor a past decision forbids.
 
 See [HTML-REPORT.md](HTML-REPORT.md) for the full HTML scaffold, diagram patterns, and styling guidance.
 
@@ -65,7 +65,7 @@ Once the user picks a candidate, run the `grill-me` skill to walk the decision t
 
 Side effects happen inline as decisions crystallize — run the `/domain-modeling` skill to keep the domain model current as you go:
 
-- **Naming a deepened module after a concept not in `CONTEXT.md`?** Add the term to `CONTEXT.md`. Create the file lazily if it doesn't exist.
-- **Sharpening a fuzzy term during the conversation?** Update `CONTEXT.md` right there.
-- **User rejects the candidate with a load-bearing reason?** Offer an ADR, framed as: _"Want me to record this as an ADR so future architecture reviews don't re-suggest it?"_ Only offer when the reason would actually be needed by a future explorer to avoid re-suggesting the same thing — skip ephemeral reasons ("not worth it right now") and self-evident ones.
+- **Naming a deepened module after a concept not in Terminology?** Add the term (create the section lazily).
+- **Sharpening a fuzzy term during the conversation?** Update Terminology right there.
+- **User rejects the candidate with a load-bearing reason?** Offer to record it as a locked Decision in a short dated `docs/design/` doc, framed as: _"Want me to record this so future architecture reviews don't re-suggest it?"_ Only when a future explorer would actually need the reason — skip ephemeral ("not worth it right now") and self-evident ones.
 - **Want to explore alternative interfaces for the deepened module?** Design it twice: sketch two alternative interfaces with parallel sub-agents and compare before committing to one.

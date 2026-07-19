@@ -3,12 +3,15 @@
 ## Project orientation docs
 
 - When starting work in a project, read (when present): `README.md`, the agent
-  instructions (`CLAUDE.md`/`AGENTS.md`), `CONTEXT.md` (domain glossary), and
+  instructions (`CLAUDE.md`/`AGENTS.md`, incl. its Terminology section), and
   `TODO.md` / `PROGRESS.md` — before exploring the code.
 - Keep those files updated as you work: a new service/module/command gets described
-  in the README, new domain terms go to `CONTEXT.md`, finished/discovered work is
+  in the README, new domain terms go to the AGENTS.md Terminology section,
+  finished/discovered work is
   reflected in `TODO.md`/`PROGRESS.md`. Update in place as part of the change, not
   as a separate chore to ask about.
+- If you feel that some skill is not up to date or miss some important context - 
+  suggest user to update it.
 
 ## Git
 

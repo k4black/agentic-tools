@@ -1,74 +1,91 @@
 ---
 name: domain-modeling
-description: Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model.
+description: Own the project's agent docs and domain language. Use when creating or restructuring an AGENTS.md/CLAUDE.md, when the user wants to pin down domain terminology, or when another skill needs the project glossary maintained.
 ---
 
-# Domain Modeling
+# Domain Modeling & Agent Docs
 
-Actively build and sharpen the project's domain model as you design. This is the *active* discipline — challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `CONTEXT.md` for vocabulary is not this skill — that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
+Two jobs, one file: the canonical **AGENTS.md/CLAUDE.md format** below, and the
+*active* discipline of maintaining its **Terminology** section — challenging
+terms, inventing edge-case scenarios, writing the glossary down the moment it
+crystallises. (Merely *reading* the Terminology section for vocabulary is not
+this skill; use it when changing the docs or the model.)
 
-## File structure
+## Canonical AGENTS.md / CLAUDE.md format
 
-Most repos have a single context:
-
-```
-/
-├── CONTEXT.md
-├── docs/
-│   └── adr/
-│       ├── 0001-event-sourced-orders.md
-│       └── 0002-postgres-for-write-model.md
-└── src/
-```
-
-If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The map points to where each one lives:
+One file per project — and per sub-project in monorepos (colocated, e.g.
+`services/api/AGENTS.md`; agents read the nearest file walking up, all levels
+are additive). `CLAUDE.md` is a symlink to `AGENTS.md` (`ln -s AGENTS.md CLAUDE.md`). Target well
+under ~200 lines per file; depth is delegated to per-area READMEs and dated
+`docs/design/` docs (which may also live per sub-project: `<sub>/docs/design/`).
 
 ```
-/
-├── CONTEXT-MAP.md
-├── docs/
-│   └── adr/                          ← system-wide decisions
-├── src/
-│   ├── ordering/
-│   │   ├── CONTEXT.md
-│   │   └── docs/adr/                 ← context-specific decisions
-│   └── billing/
-│       ├── CONTEXT.md
-│       └── docs/adr/
+repo/
+├── AGENTS.md            # this format; CLAUDE.md -> AGENTS.md symlink
+├── docs/design/         # dated design docs (cross-cutting)
+├── services/api/
+│   ├── AGENTS.md        # sub-project file, same format, own Terminology
+│   └── docs/design/
+└── apps/web/
+    └── AGENTS.md
 ```
 
-Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
+```markdown
+# <project> — <one-liner>. Full architecture/setup → README.md
+
+## Project in one glance      ← TLDR: purpose, stack, build system
+## Where things live          ← TABLES (path | one-line purpose), never prose
+                                paragraphs; point to per-area READMEs
+## First-time setup           ← only if non-obvious
+## Commands                   ← copy-paste-ready; wrong-vs-right variants
+## Core rules                 ← numbered, few, non-overlapping
+## Code style                 ← only deviations from defaults; "X, NOT Y" form
+## Testing / Making a PR      ← short
+## Terminology                ← the domain glossary (format below)
+## Gotchas                    ← numbered, symptom → cause → fix, 1–3 lines,
+                                ends with "add new gotchas here" self-maintenance
+```
+
+Content rules: only what an agent can't derive from the code (pitfalls,
+rationale, non-default conventions); no changelogs, no file-by-file tours, no
+generic best practices. Test for every line: *would removing it cause mistakes?*
+
+## Terminology section format
+
+```md
+## Terminology
+
+**Order**: A confirmed customer purchase, from checkout to fulfillment.
+_Avoid_: purchase, transaction
+
+**Customer**: A person or organization that places orders.
+_Avoid_: client, buyer, account
+```
+
+- **Be opinionated** — pick one canonical term, list the losers under `_Avoid_`.
+- **Tight definitions** — one or two sentences; what it IS, not what it does.
+- **Project-specific terms only** — general programming concepts don't belong.
+- **No implementation details** — it's a glossary, not a spec or scratchpad.
+- Add the section lazily, when the first term is resolved.
 
 ## During the session
 
-### Challenge against the glossary
+- **Challenge against the glossary.** A term conflicting with Terminology gets
+  called out immediately: "Your glossary defines 'cancellation' as X, but you
+  seem to mean Y — which is it?"
+- **Sharpen fuzzy language.** Vague or overloaded term → propose a precise
+  canonical one: "'account' — the Customer or the User? Different things."
+- **Stress-test with concrete scenarios.** Invent edge cases that force
+  precision about the boundaries between concepts.
+- **Cross-reference with code.** The user says how something works → check the
+  code agrees; surface contradictions: "Your code cancels entire Orders, but
+  you just said partial cancellation is possible — which is right?"
+- **Update Terminology inline**, the moment a term resolves — never batch.
 
-When the user uses a term that conflicts with the existing language in `CONTEXT.md`, call it out immediately. "Your glossary defines 'cancellation' as X, but you seem to mean Y — which is it?"
+## Hard decisions
 
-### Sharpen fuzzy language
-
-When the user uses vague or overloaded terms, propose a precise canonical term. "You're saying 'account' — do you mean the Customer or the User? Those are different things."
-
-### Discuss concrete scenarios
-
-When domain relationships are being discussed, stress-test them with specific scenarios. Invent scenarios that probe edge cases and force the user to be precise about the boundaries between concepts.
-
-### Cross-reference with code
-
-When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
-
-### Update CONTEXT.md inline
-
-When a term is resolved, update `CONTEXT.md` right there. Don't batch these up — capture them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
-
-`CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
-
-### Offer ADRs sparingly
-
-Only offer to create an ADR when all three are true:
-
-1. **Hard to reverse** — the cost of changing your mind later is meaningful
-2. **Surprising without context** — a future reader will wonder "why did they do it this way?"
-3. **The result of a real trade-off** — there were genuine alternatives and you picked one for specific reasons
-
-If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).
+There is no separate ADR system. A decision that is hard to reverse, surprising
+without context, and a real trade-off is recorded as a locked Decision in a
+dated `docs/design/yyyy-MM-dd-<slug>.md` doc (see the `design-doc` skill) — a
+standalone decision gets a short decision-only doc. Anything less doesn't need
+a record.

@@ -14,7 +14,7 @@ to this conversation, and lean enough to be read in one sitting.
 2. **Grill the user.** Resolve every open decision with the `grill-me` skill.
 3. **Write the doc** using the template below.
 4. **Hand off.** Offer a `critique-loop` review of the doc; implementation
-   (a later session, the `tdd` skill, or a ralph loop) takes the doc as input.
+   (a later session, the `test-driven-dev` skill, or a ralph loop) takes the doc as input.
 
 ## 1. Research
 
@@ -29,8 +29,8 @@ Before proposing anything:
   keys, callers/consumers of anything you touch, patterns already present that
   the design should copy rather than reinvent.
 - Never assume something is missing — search first.
-- If the project keeps a `CONTEXT.md` glossary (`domain-modeling` skill), use
-  its vocabulary and record new terms there.
+- If the project's AGENTS.md/CLAUDE.md has a Terminology section
+  (`domain-modeling` skill), use its vocabulary and record new terms there.
 
 ## 2. Grill
 
@@ -106,7 +106,8 @@ tomorrow with no other context:
    against right now.
 5. **Scope honest?** YAGNI speculation, silently narrowed requirements,
    missing non-goals.
-6. **Contradictions?** Internal, or with CONTEXT.md / ADRs / prior designs.
+6. **Contradictions?** Internal, or with the Terminology section / prior
+   design docs.
 
 Objections are numbered and concrete: section, what's wrong, what would fix it.
 Never approve with "minor issues to fix later"; never invent objections to look
@@ -114,11 +115,11 @@ thorough — approve when it is genuinely implementable.
 
 ## Style rules
 
-- Prefer tables for enumerable facts (callers, phases, label sets); prose for
-- Prefer consise tables (callers, phases, comparison) or bulletpoints (reasoning, ideas etc)
+- Prefer concise tables (callers, phases, comparisons) or bullet points
+  (reasoning, ideas) over prose.
 - Use mermaid diagrams to show complex relations.
 - Cite code as `path:line`, always from files read during this session.
-- Don't duplicate content that lives elsewhere (CONTEXT.md, ADRs, prior
+- Don't duplicate content that lives elsewhere (AGENTS.md Terminology, prior
   designs) — link it.
 - Reviews append to the doc (a dated review-round section or status bump), they
   don't fork it.
