@@ -7,7 +7,7 @@
 #                          (OpenCode reads ~/.claude/skills + ~/.agents/skills natively)
 #   GLOBAL-AGENTS.md    -> ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, ~/.config/opencode/AGENTS.md
 #   rtk hook            -> installed by rtk's own installer (rtk init)
-#   Claude plugins      -> installed via the claude CLI (marketplaces + plugins)
+#   Claude plugins/MCP  -> installed via the claude/codex CLIs (never hand-edited configs)
 
 set -euo pipefail
 
@@ -16,12 +16,13 @@ SKILLS_SRC="$REPO/skills"
 
 # --- helpers -----------------------------------------------------------------
 
-# link <target> <linkpath>: idempotent symlink; backs up a pre-existing real file once.
+# link <target> <linkpath>: idempotent symlink; backs up a pre-existing real file.
 link() {
   local target="$1" linkpath="$2"
   if [ -e "$linkpath" ] && [ ! -L "$linkpath" ]; then
-    mv "$linkpath" "$linkpath.pre-agentic-tools.bak"
-    echo "  backed up $linkpath -> $linkpath.pre-agentic-tools.bak"
+    local bak="$linkpath.pre-agentic-tools.$(date +%Y%m%d%H%M%S).bak"
+    mv "$linkpath" "$bak"
+    echo "  backed up $linkpath -> $bak"
   fi
   ln -sfn "$target" "$linkpath"
   echo "  linked $linkpath -> $target"
@@ -36,11 +37,12 @@ for dst in "$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.codex/skills"; 
     [ -d "$skill" ] || continue
     link "${skill%/}" "$dst/$(basename "$skill")"
   done
-  # drop legacy links into the old dotfiles plugin tree and any dangling links
+  # cleanup, ownership-scoped: only links we (or the legacy dotfiles setup) created
   for existing in "$dst"/*; do
     [ -L "$existing" ] || continue
     target="$(readlink "$existing")"
-    if [[ "$target" == *"/.dotfiles/plugins/"* ]] || [ ! -e "$existing" ]; then
+    if [[ "$target" == *"/.dotfiles/plugins/"* ]] \
+       || { [[ "$target" == "$SKILLS_SRC/"* ]] && [ ! -e "$existing" ]; }; then
       rm "$existing"
       echo "  removed stale $existing -> $target"
     fi
@@ -50,18 +52,16 @@ done
 # --- 2. global rules ----------------------------------------------------------
 
 echo "global rules"
-mkdir -p "$HOME/.claude" "$HOME/.codex"
+mkdir -p "$HOME/.claude" "$HOME/.codex" "$HOME/.config/opencode"
 link "$REPO/GLOBAL-AGENTS.md" "$HOME/.claude/CLAUDE.md"
 link "$REPO/GLOBAL-AGENTS.md" "$HOME/.codex/AGENTS.md"
-if [ -d "$HOME/.config/opencode" ]; then
-  link "$REPO/GLOBAL-AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
-fi
+link "$REPO/GLOBAL-AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
 
 # --- 3. rtk hook (rtk's own installer; no hand-edited configs) ---------------
 
 if command -v rtk >/dev/null 2>&1; then
   echo "rtk hook (rtk init)"
-  rtk init -g --hook-only
+  rtk init -g --hook-only --auto-patch
 else
   echo "rtk not installed — skipping hook setup (install rtk, then re-run)"
 fi
@@ -73,10 +73,11 @@ if command -v claude >/dev/null 2>&1; then
   marketplaces="$(claude plugin marketplace list 2>/dev/null || true)"
   add_marketplace() {
     local name="$1" source="$2"
-    if ! grep -q "$name" <<<"$marketplaces"; then
-      claude plugin marketplace add "$source" && echo "  added marketplace $name"
-    else
+    if grep -q "$name" <<<"$marketplaces"; then
       echo "  marketplace $name ok"
+    else
+      claude plugin marketplace add "$source"
+      echo "  added marketplace $name"
     fi
   }
   add_marketplace "litestar" "litestar-org/litestar-skills"
@@ -85,7 +86,8 @@ if command -v claude >/dev/null 2>&1; then
   # legacy sources, superseded by this repo / dropped
   for legacy in kchernyshev-dotfiles apple-notes-mcp; do
     if grep -q "$legacy" <<<"$marketplaces"; then
-      claude plugin marketplace remove "$legacy" && echo "  removed legacy marketplace $legacy"
+      claude plugin marketplace remove "$legacy"
+      echo "  removed legacy marketplace $legacy"
     fi
   done
 
@@ -102,10 +104,12 @@ if command -v claude >/dev/null 2>&1; then
     elastic-kibana@elastic-agent-skills \
     elastic-observability@elastic-agent-skills \
   ; do
-    if ! grep -q "${plugin%%@*}" <<<"$installed"; then
-      claude plugin install "$plugin" && echo "  installed $plugin"
-    else
+    # `claude plugin list` prints full plugin@marketplace ids — match exactly
+    if grep -qF "$plugin" <<<"$installed"; then
       echo "  $plugin ok"
+    else
+      claude plugin install "$plugin"
+      echo "  installed $plugin"
     fi
   done
 else
@@ -118,17 +122,19 @@ fi
 if command -v dart >/dev/null 2>&1; then
   echo "mcp servers"
   if command -v claude >/dev/null 2>&1; then
-    if ! claude mcp list 2>/dev/null | grep -q '^dart:'; then
-      claude mcp add --scope user --transport stdio dart -- dart mcp-server && echo "  claude: added dart"
-    else
+    if claude mcp list 2>/dev/null | grep -q '^dart:'; then
       echo "  claude: dart ok"
+    else
+      claude mcp add --scope user --transport stdio dart -- dart mcp-server
+      echo "  claude: added dart"
     fi
   fi
   if command -v codex >/dev/null 2>&1; then
-    if ! codex mcp list 2>/dev/null | grep -q 'dart'; then
-      codex mcp add dart -- dart mcp-server --force-roots-fallback && echo "  codex: added dart"
-    else
+    if codex mcp list 2>/dev/null | grep -q 'dart'; then
       echo "  codex: dart ok"
+    else
+      codex mcp add dart -- dart mcp-server --force-roots-fallback
+      echo "  codex: added dart"
     fi
   fi
 else

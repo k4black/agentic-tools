@@ -29,10 +29,13 @@ OWNER_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 
 A stale base can make CI pass on obsolete code or block merge even when every check is green.
 
-Run `gh pr view --json mergeable,mergeStateStatus,baseRefName`.
+Run `gh pr view --json mergeable,mergeStateStatus,baseRefName`. Branch on BOTH fields:
 
-- **`MERGEABLE`** → Step 1.
-- **`UNKNOWN`** → GitHub hasn't computed it yet; wait ~5s and re-check (up to 3 tries).
+- **`mergeable: UNKNOWN`** → GitHub hasn't computed it yet; wait ~5s and re-check (up to 3 tries).
+- **`mergeStateStatus: BEHIND`** → the base moved ahead; rebase (below) so CI runs against current base.
+- **`mergeStateStatus: DRAFT`** → report to the user — a draft PR isn't babysittable to merge; ask if it should be marked ready.
+- **`mergeStateStatus: BLOCKED`** with green checks → usually missing required approvals; that needs a human — report it in the final summary rather than looping.
+- **`mergeable: MERGEABLE` and none of the above** → Step 1.
 - **`CONFLICTING` / `DIRTY`** → rebase onto the base branch:
   - Trivial, mechanical conflicts (lockfiles, import ordering, adjacent edits to separate symbols): resolve, continue the rebase, push with `--force-with-lease` (never plain `--force`).
   - Non-trivial conflicts (overlapping logic, schema/API changes, anything needing product judgement): abort the rebase and ask the user.
@@ -58,7 +61,9 @@ query($owner:String!,$repo:String!,$pr:Int!){
 }'
 ```
 
-A thread needs attention when `isResolved` is false and the last comment is from a bot (login ends in `[bot]`, or is a known reviewer bot). For each such thread:
+If the PR has more than 100 threads (or 50 comments in one thread), page with GraphQL cursors — the counts above are first-page sizes, not the guarantee.
+
+A thread needs attention when `isResolved` is false and it was **started by a bot** (first comment's author login ends in `[bot]`, or is a known reviewer bot) — a later human reply does not make the thread handled; only resolving does. For each such thread:
 
 1. **Evaluate the finding on the merits.** Read the referenced code. Bots produce false positives; do not blindly apply suggestions.
 2. **True positive** → fix the code. Batch related fixes into one conventional commit.
@@ -66,7 +71,8 @@ A thread needs attention when `isResolved` is false and the last comment is from
 4. **Reply and resolve** the thread:
 
 ```bash
-# Reply to the thread (use the last comment's databaseId)
+# Reply to the thread. <comment_id> MUST be the databaseId of the thread's FIRST
+# (top-level) comment — GitHub rejects replies addressed to a reply.
 gh api repos/$OWNER_REPO/pulls/<number>/comments/<comment_id>/replies -f body='<what you did and why>'
 
 # Mark the thread resolved
@@ -79,7 +85,7 @@ Push any fixes before proceeding.
 
 ### Step 2: Check CI status
 
-Run `gh pr checks`.
+Run `gh pr checks --required` (required checks gate the merge; also glance at `gh pr checks` for optional failures worth mentioning in the summary, but don't loop on them).
 
 - **All passing** → Phase 2.
 - **Any pending / in-progress** → Step 3.
@@ -94,7 +100,7 @@ Run `gh pr checks`.
 For each failed check:
 
 1. Identify the failing run: `gh pr checks --json name,link,state,workflow`.
-2. Fetch failing logs: `gh run view <run-id> --log-failed` (grep for the first error in long logs).
+2. Fetch failing logs. GitHub Actions checks: `gh run view <run-id> --log-failed` (grep for the first error in long logs). External providers (Vercel, CircleCI, …) have no Actions run ID — follow the check's `link` for details, or ask the user if the provider's logs aren't reachable.
 3. Analyze the root cause — read the relevant code, don't guess from the log alone.
 4. Fix minimally; do not refactor unrelated code.
 5. Reproduce the check locally where feasible (lint, type-check, unit tests).
@@ -117,11 +123,12 @@ Poll for a bounded window (default ~10 minutes after the last push, checking eve
 
 ### Step 6: Final sanity check
 
-Re-run `gh pr checks` and `gh pr view --json mergeable` once more — intermediate commits may have kicked off a new run, and the base may have moved.
+Re-run `gh pr checks --required` and `gh pr view --json mergeable,mergeStateStatus` once more — intermediate commits may have kicked off a new run, and the base may have moved.
 
-- **All green and mergeable** → summary report. Done.
+- **All green, `MERGEABLE`, and `mergeStateStatus` is `CLEAN`** (or `UNSTABLE` with only optional checks failing — note them) → summary report. Done.
 - **Anything failing/pending** → back to Step 2.
-- **Conflicting with base** → back to Step 0.
+- **`BEHIND` / conflicting with base** → back to Step 0.
+- **`BLOCKED`** → checks are green but merge requirements (e.g. required reviews) need a human — report it.
 
 ## Summary report
 

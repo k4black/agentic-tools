@@ -14,6 +14,7 @@ Token-optimized CLI proxy (60–90% savings on dev operations).
 
 - **Claude Code**: a PreToolUse hook rewrites Bash commands automatically (`git status` → `rtk git status`). Do NOT prefix commands yourself.
 - **Codex CLI / all other harnesses** (no hook): always prefix shell commands with `rtk` yourself: `rtk git status`, `rtk cargo test`, `rtk npm run build`, `rtk pytest -q`.
+- If `rtk` is not installed on this machine, run commands directly and suggest installing it once.
 
 ### Meta commands (always call rtk directly)
 

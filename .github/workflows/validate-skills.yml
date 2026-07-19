@@ -20,6 +20,6 @@ jobs:
           set -e
           for skill in skills/*/; do
             echo "::group::$skill"
-            npx --yes skills-ref validate "$skill"
+            npx --yes skills-ref@0.1.5 validate "$skill"
             echo "::endgroup::"
           done

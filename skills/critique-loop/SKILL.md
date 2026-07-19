@@ -2,7 +2,7 @@
 name: critique-loop
 description: Use when the user wants cross-model adversarial review — "critique-loop on <task>", "pair with Codex/Cursor on this", "review my changes/branch/diff with Codex", "have another model review this plan", or an iterative review-fix cycle before shipping. Two entry points - full flow (plan → review → implement → review) and review-only (existing diff).
 license: MIT
-compatibility: Requires either Codex CLI (`codex`, authenticated) or Cursor CLI (`cursor-agent`, authenticated). Run from inside a git repository, on a feature branch (not `main`/`master`).
+compatibility: Requires either Codex CLI (`codex`, authenticated) or Cursor CLI (`cursor-agent`, Jan 2026+ release with `--mode plan` support, authenticated). Run from inside a git repository, on a feature branch (not `main`/`master`).
 allowed-tools: Bash(codex exec *) Bash(codex exec resume *) Bash(cursor-agent *) Bash(git add *) Bash(git commit *) Bash(git status *) Bash(git diff *) Bash(git log *) Bash(git rev-parse *) Bash(git branch --show-current) Bash(mkdir -p .critique-loop) Bash(cat .critique-loop/*) Bash(grep -oE *) Bash(tee .critique-loop/*)
 ---
 
@@ -33,9 +33,10 @@ The skill body refers to two abstract operations: **START-SESSION** (first call,
 - **Sandbox:** `read-only` (navigator reviews; it does not write code)
 - **Model / effort:** CLI defaults (see Configuration)
 
-**START-SESSION** (tee the log, grep the session ID after the call):
+**START-SESSION** (tee the log, grep the session ID after the call; `pipefail` so a codex failure isn't masked by `tee`):
 
 ```bash
+set -o pipefail
 codex exec \
   --sandbox read-only \
   -o <OUTPUT_FILE> \
@@ -103,16 +104,16 @@ Rules:
 
 1. **Print all asks from the current round before acting on any of them** — file, location, description — so the user has full visibility.
 2. **Recurring ask you already fixed** — the navigator may have missed the fix. Point it at the exact commit/lines in your driver response; if you are confident the fix is correct, do not redo it.
-3. **Oscillating ask** (navigator flip-flops: raise → drop → re-raise, or suggests contradictory fixes across rounds) — do NOT keep changing the code back and forth. Document it in place and move on:
+3. **Oscillating ask** (navigator flip-flops: raise → drop → re-raise, or suggests contradictory fixes across rounds) — do NOT keep changing the code back and forth. Document it in place (using the file's native comment syntax — `#`, `//`, `<!-- -->`, …) and move on:
 
    ```
-   // NOTE(critique-loop): navigator oscillated on this.
-   // Round N: suggested X. Round M: suggested Y.
-   // Keeping current implementation.
+   # NOTE(critique-loop): navigator oscillated on this.
+   # Round N: suggested X. Round M: suggested Y.
+   # Keeping current implementation.
    ```
 
    Mark it resolved in your log and ignore it in all future rounds.
-4. **Disagreement you can't resolve** — if you disagree with an ask and it isn't worth a user interruption, leave a `// TODO(critique-loop): <why skipped>` comment at the site and say so in the driver response. Product/architecture disagreements still go to the user (Step 6 classification).
+4. **Disagreement you can't resolve** — if you disagree with an ask and it isn't worth a user interruption, leave a `TODO(critique-loop): <why skipped>` comment at the site (file's native comment syntax) and say so in the driver response. Product/architecture disagreements still go to the user (Step 6 classification).
 5. **Stuck detection** — before each new round, check: same asks repeating 3+ rounds? all remaining asks oscillating/skipped? ask count not shrinking despite fixes? If any is true, exit the loop early and report why instead of burning rounds.
 
 ## Phase 1: Draft the plan
@@ -122,14 +123,14 @@ Rules:
 Read the task from the user's request. Explore the repo enough to write a concrete plan (real file paths, existing patterns). Don't implement yet.
 
 ```bash
-SLUG=$(git branch --show-current)
+SLUG=$(git branch --show-current | tr '/' '-')   # filesystem-safe: feature/foo -> feature-foo
 # If on main/master, ask user for a branch + slug
 mkdir -p .critique-loop
 
 if ! grep -qxE '\.critique-loop/?' .gitignore 2>/dev/null; then
   echo ".critique-loop/" >> .gitignore
-  git add .gitignore
-  git commit -m "chore: gitignore .critique-loop artifacts"
+  # pathspec form: commits ONLY .gitignore, never sweeps in other staged work
+  git commit -m "chore: gitignore .critique-loop artifacts" -- .gitignore
 fi
 ```
 
@@ -350,19 +351,26 @@ Use when the user already has changes and wants an adversarial review — no pla
 
 ### R1: Setup
 
-Same as Step 1 — pick `<slug>`, create `.critique-loop/`, ensure it's gitignored.
+Same as Step 1 — pick `<slug>` (slash-sanitized), create `.critique-loop/`, ensure it's gitignored (pathspec-scoped commit).
 
 ### R2: Determine the diff range
 
-Ask the user what to review if not obvious. Default: the branch versus its merge base with `origin/main`:
+Ask the user what to review if not obvious. Default: the branch versus its merge base with the repo's default branch (don't assume `main`):
 
 ```bash
-BASE=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main)
+DEFAULT=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+DEFAULT=${DEFAULT:-$(git branch -l main master --format='%(refname:short)' | head -1)}
+BASE=$(git merge-base HEAD "origin/$DEFAULT" 2>/dev/null || git merge-base HEAD "$DEFAULT")
 REVIEW_RANGE="${BASE}..HEAD"
 echo "${REVIEW_RANGE}" > .critique-loop/<slug>.review-range
 ```
 
 Other shapes: `HEAD` for uncommitted working-tree changes (navigator reads `git diff HEAD`); `<sha1>..<sha2>`; `<base>...HEAD`.
+
+**Range integrity across rounds** — the recorded range must keep covering the work as fix commits land:
+
+- The recorded `BASE` SHA is fixed; re-reviews always diff `${BASE}..HEAD` so later fix commits are included. Never re-record a range that would exclude them (`<sha1>..<sha2>` becomes `<sha1>..HEAD` after the first fix round).
+- If reviewing uncommitted changes (`HEAD` shape): untracked files are invisible to `git diff HEAD` — tell the navigator to also check `git status --porcelain` and read new files; and once you commit fixes, switch the range to `<original-HEAD>..HEAD` plus the dirty tree, or the re-review sees an empty diff and false-approves.
 
 ### R3: Navigator reviews the diff
 
