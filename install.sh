@@ -9,6 +9,7 @@
 #   rtk hook            -> installed by rtk's own installer (rtk init)
 #   Claude plugins/MCP  -> installed via the claude/codex CLIs (never hand-edited configs)
 #   ralph/              -> ~/.ralph/config.yml + ~/.config/ralph/presets (ralph-orchestrator)
+#   permissions/        -> claude settings.json allow-rules merge + ~/.codex/rules/ symlink
 
 set -euo pipefail
 
@@ -186,6 +187,44 @@ if ralph_supported; then
   link "$REPO/ralph/presets" "$HOME/.config/ralph/presets"
 else
   echo "ralph missing or < 2.10 — skipping (npm i -g @ralph-orchestrator/ralph-cli, then re-run)"
+fi
+
+# --- 7. permission allowlists: read-only commands (rtk + plain variants) ------
+
+# Claude Code: merge permissions/claude-allow.json into ~/.claude/settings.json
+# (permissions merge additively across scopes; no CLI exists for rules, and the
+# docs name editing settings.json as the supported mechanism). Merge only ADDS
+# missing rules — user's own rules and all other settings are untouched.
+if command -v claude >/dev/null 2>&1; then
+  echo "claude permission allowlist"
+  python3 - "$REPO/permissions/claude-allow.json" "$HOME/.claude/settings.json" <<'PYEOF'
+import json, sys, os
+rules_file, settings_file = sys.argv[1], sys.argv[2]
+rules = json.load(open(rules_file))
+settings = json.load(open(settings_file)) if os.path.exists(settings_file) else {}
+allow = settings.setdefault("permissions", {}).setdefault("allow", [])
+added = [r for r in rules if r not in allow]
+if added:
+    allow.extend(added)
+    json.dump(settings, open(settings_file, "w"), indent=2)
+    open(settings_file, "a").write("\n")
+    print(f"  added {len(added)} allow rules")
+else:
+    print("  allow rules ok")
+PYEOF
+fi
+
+# Codex: execpolicy rules file — additive (codex loads every file in ~/.codex/rules/;
+# its own "always allow" amendments go to default.rules, never this file)
+if command -v codex >/dev/null 2>&1; then
+  echo "codex execpolicy rules"
+  mkdir -p "$HOME/.codex/rules"
+  link "$REPO/permissions/codex.rules" "$HOME/.codex/rules/agentic-tools.rules"
+  if codex execpolicy check --rules "$REPO/permissions/codex.rules" -- rtk git status >/dev/null 2>&1; then
+    echo "  execpolicy validated (rtk git status -> allow)"
+  else
+    echo "  warning: codex execpolicy check failed or unsupported — verify manually"
+  fi
 fi
 
 echo "done — all detected harnesses are wired."

@@ -26,6 +26,13 @@ through `claude mcp add` / `codex mcp add` — so a fresh machine gets the full 
 ralph-orchestrator (≥ 2.10) additionally gets a global config with repo-local skill injection
 and five custom hat-collection presets (see `ralph/README.md`).
 
+Read-only commands (`ls`, `grep`, `find`, `git log/diff/…`, `gh pr view/…` and their `rtk`
+variants) are pre-approved in every repo: `permissions/claude-allow.json` is merged into
+user-level `~/.claude/settings.json` (rules merge additively across scopes; project denies
+still win), and `permissions/codex.rules` is an execpolicy file symlinked into
+`~/.codex/rules/` (additive — codex's own "always allow" amendments stay in `default.rules`).
+Deliberately excluded: `rtk proxy` (arbitrary passthrough), test runners, `gh api`.
+
 Everything is symlinked, so the harnesses track this repo live (edit a SKILL.md, it's live everywhere).
 
 ## Layout
@@ -34,6 +41,8 @@ Everything is symlinked, so the harnesses track this repo live (edit a SKILL.md,
 skills/            canonical skill tree — agentskills.io spec, one folder per skill
 GLOBAL-AGENTS.md   single source of truth for global rules (git conventions, RTK usage)
 ralph/             ralph-orchestrator global config, custom presets (design-doc, implement[-plus], tdd[-plus]), project template
+permissions/       pre-approved read-only commands: claude-allow.json (merged into
+                   ~/.claude/settings.json) + codex.rules (execpolicy, symlinked)
 install.sh         the idempotent bootstrap
 ```
 

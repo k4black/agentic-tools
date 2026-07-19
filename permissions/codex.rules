@@ -1,0 +1,73 @@
+# Codex execpolicy rules (Starlark) — symlinked to ~/.codex/rules/agentic-tools.rules
+# by install.sh. Additive: codex loads every file in ~/.codex/rules/, so this never
+# touches default.rules (where codex appends its own "always allow" amendments).
+#
+# Matching is on tokenized argv PREFIXES (a flag between tokens breaks the match),
+# most restrictive rule wins (forbidden > prompt > allow). Validate with:
+#   codex execpolicy check --pretty --rules permissions/codex.rules -- rtk git status
+#
+# Only read-only commands belong here. Codex's built-in safe list already covers
+# plain ls/cat/grep/find/git-read-only — these rules add what it misses: rtk-wrapped
+# variants (codex has no rewrite hook; agents prefix rtk manually per GLOBAL-AGENTS.md)
+# and read-only gh/tree. Deliberately absent: `rtk proxy` (arbitrary passthrough),
+# test runners (project-level decision), `gh api` (can POST).
+
+prefix_rule(
+    pattern = ["tree"],
+    decision = "allow",
+    justification = "read-only directory tree",
+)
+
+prefix_rule(
+    pattern = ["gh", "pr", ["view", "list", "diff", "checks"]],
+    decision = "allow",
+    justification = "read-only GitHub PR inspection",
+    match = [["gh", "pr", "view"], "gh pr diff 12", "gh pr checks 7 --required"],
+    not_match = ["gh pr create", "gh pr merge 12"],
+)
+
+prefix_rule(
+    pattern = ["gh", "repo", "view"],
+    decision = "allow",
+    justification = "read-only repo metadata",
+)
+
+prefix_rule(
+    pattern = ["gh", "run", ["view", "list"]],
+    decision = "allow",
+    justification = "read-only CI run inspection",
+)
+
+prefix_rule(
+    pattern = ["rtk", ["ls", "cat", "head", "tail", "wc", "grep", "rg", "find", "tree", "read", "gain"]],
+    decision = "allow",
+    justification = "rtk-wrapped read-only file/search commands",
+    match = [["rtk", "grep"], "rtk ls -la src", "rtk gain --history"],
+    not_match = ["rtk proxy rm -rf /", ["rtk", "npm"]],
+)
+
+prefix_rule(
+    pattern = ["rtk", "--version"],
+    decision = "allow",
+    justification = "rtk version check",
+)
+
+prefix_rule(
+    pattern = ["rtk", "git", ["status", "log", "diff", "show", "ls-tree", "ls-files", "rev-parse", "blame"]],
+    decision = "allow",
+    justification = "rtk-wrapped read-only git",
+    match = ["rtk git status", ["rtk", "git", "log", "--oneline"]],
+    not_match = ["rtk git push", "rtk git commit -m x"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "gh", "pr", ["view", "list", "diff", "checks"]],
+    decision = "allow",
+    justification = "rtk-wrapped read-only GitHub PR inspection",
+)
+
+prefix_rule(
+    pattern = ["rtk", "gh", "repo", "view"],
+    decision = "allow",
+    justification = "rtk-wrapped read-only repo metadata",
+)
