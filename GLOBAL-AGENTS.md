@@ -1,14 +1,25 @@
 # Global Agent Rules
 
+## Project orientation docs
+
+- When starting work in a project, read (when present): `README.md`, the agent
+  instructions (`CLAUDE.md`/`AGENTS.md`), `CONTEXT.md` (domain glossary), and
+  `TODO.md` / `PROGRESS.md` — before exploring the code.
+- Keep those files updated as you work: a new service/module/command gets described
+  in the README, new domain terms go to `CONTEXT.md`, finished/discovered work is
+  reflected in `TODO.md`/`PROGRESS.md`. Update in place as part of the change, not
+  as a separate chore to ask about.
+
 ## Git
 
-- Use Conventional Commits 1.0.0: `<type>[optional scope]: <description>` (e.g. `feat(lang): add Polish language`). Keep the first line ≤ 72 characters; no long commit bodies.
+- Use Conventional Commits 1.0.0: `<type>[optional scope]: <description>` (e.g. `feat(lang): add Polish language`).
+- Keep the first line ≤ 72 characters; no long commit bodie, for complex features short bulletpoints.
 - Never add AI-attribution strings to commits or PRs: no `Co-Authored-By: Claude/Codex/...`, no "Generated with ..." footers.
 - Commit only when explicitly asked, or when the active workflow/skill inherently requires commits (e.g. babysit-pr, critique-loop).
 
 ## RTK — Rust Token Killer
 
-Token-optimized CLI proxy (60–90% savings on dev operations).
+Token-optimized CLI proxy in installed to save context tokens.
 
 ### Harness-specific usage
 
@@ -20,16 +31,8 @@ Token-optimized CLI proxy (60–90% savings on dev operations).
 
 ```bash
 rtk gain              # Token savings analytics
-rtk gain --history    # Command usage history with savings
-rtk discover          # Analyze agent history for missed opportunities
 rtk proxy <cmd>       # Execute raw command without filtering (debugging)
-```
-
-### Verification
-
-```bash
 rtk --version         # Should show: rtk X.Y.Z
 which rtk             # Verify correct binary
 ```
 
-⚠️ **Name collision**: if `rtk gain` fails, you may have reachingforthejack/rtk (Rust Type Kit) installed instead.

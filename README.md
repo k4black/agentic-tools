@@ -18,10 +18,13 @@ Re-run it any time: after `git pull`, after adding a skill, after installing a n
 | Claude Code | `~/.claude/skills/*` (symlinks) | `~/.claude/CLAUDE.md` → `GLOBAL-AGENTS.md` |
 | Codex CLI | `~/.codex/skills/*` + `~/.agents/skills/*` (symlinks) | `~/.codex/AGENTS.md` → `GLOBAL-AGENTS.md` |
 | OpenCode | reads `~/.claude/skills` + `~/.agents/skills` natively | `~/.config/opencode/AGENTS.md` → `GLOBAL-AGENTS.md` |
+| ralph-orchestrator | `~/.config/ralph/presets` → `ralph/presets/` | `~/.ralph/config.yml` → `ralph/config.yml` |
 
 Tool configuration is never hand-edited: the RTK hook is installed by `rtk init`, Claude Code
-marketplaces/plugins through the `claude plugin` CLI, and MCP servers (Dart/Flutter) through
-`claude mcp add` / `codex mcp add` — so a fresh machine gets the full setup in one run.
+marketplaces/plugins through the `claude plugin` CLI, and MCP servers (Dart/Flutter, ralph)
+through `claude mcp add` / `codex mcp add` — so a fresh machine gets the full setup in one run.
+ralph-orchestrator (≥ 2.10) additionally gets a global config with repo-local skill injection
+and five custom hat-collection presets (see `ralph/README.md`).
 
 Everything is symlinked, so the harnesses track this repo live (edit a SKILL.md, it's live everywhere).
 
@@ -30,7 +33,7 @@ Everything is symlinked, so the harnesses track this repo live (edit a SKILL.md,
 ```
 skills/            canonical skill tree — agentskills.io spec, one folder per skill
 GLOBAL-AGENTS.md   single source of truth for global rules (git conventions, RTK usage)
-ralph/             reusable ralph-orchestrator templates (scaffold)
+ralph/             ralph-orchestrator global config, custom presets (design-doc, implement[-plus], tdd[-plus]), project template
 install.sh         the idempotent bootstrap
 ```
 
@@ -43,6 +46,7 @@ install.sh         the idempotent bootstrap
 | `apple-reminders` | Add/view/complete Apple Reminders |
 | `babysit-pr` | Drive a PR to merge-ready: fix CI, resolve bot review threads (gh-only) |
 | `critique-loop` | Cross-model adversarial review (Codex/Cursor navigator), plan + code flows |
+| `design-doc` | Research → grill → write `docs/design/yyyy-MM-dd-<slug>.md` feature design doc |
 | `domain-modeling` | Maintain a project's domain model / ubiquitous language / ADRs |
 | `grill-me` | Relentless interview to stress-test a plan until shared understanding |
 | `handoff` | Compact the current conversation into a handoff doc for the next session |
