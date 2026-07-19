@@ -3,7 +3,7 @@
 # default to blocked, critic defaults to rejected). One vertical slice per
 # iteration. Two-critic variant: tdd-plus.yml.
 #
-# METHOD lives in the `tdd` skill (seams, vertical slices, red->green, no
+# METHOD lives in the `test-driven-dev` skill (seams, vertical slices, red->green, no
 # refactor phase). Headless deviation, since there is no user to pre-agree
 # seams with: an approved design doc stands in for that agreement; with only
 # a rough description the planner picks conservative seams and records them
@@ -21,7 +21,7 @@
 # (see ../templates/ralph.yml) — set required_events: ["slice.done"].
 
 name: "TDD"
-description: "Red-green vertical slices per the tdd skill; codex critic re-runs everything, fail-closed."
+description: "Red-green vertical slices per the test-driven-dev skill; codex critic re-runs everything, fail-closed."
 
 event_loop:
   starting_event: "build.start"
@@ -52,7 +52,7 @@ hats:
     instructions: |
       ## PLANNER MODE — Seams And Vertical Slices
 
-      Follow the `tdd` skill (read its SKILL.md) for what seams and vertical
+      Follow the `test-driven-dev` skill (read its SKILL.md) for what seams and vertical
       slices mean. You decompose; you never implement or review.
 
       Every event you emit carries the JSON envelope
@@ -105,7 +105,7 @@ hats:
     instructions: |
       ## BUILDER MODE — Red -> Green For One Slice
 
-      Follow the `tdd` skill (read its SKILL.md) — it is the method; the loop
+      Follow the `test-driven-dev` skill (read its SKILL.md) — it is the method; the loop
       rules here only bind it to the queue:
 
       1. Search the codebase first — do not assume something is missing
@@ -155,7 +155,7 @@ hats:
          suite if the change crosses a boundary.
       2. **Verify RED really happened**: would the new test fail without the
          new implementation? If it never exercised the seam, reject.
-      3. **Test quality** (per the `tdd` skill): through the agreed seam,
+      3. **Test quality** (per the `test-driven-dev` skill): through the agreed seam,
          asserts observable behavior, not tautological or internals-coupled.
       4. **Implementation quality**: complete (no stubs), minimal (no YAGNI
          extras), native to the codebase's patterns.

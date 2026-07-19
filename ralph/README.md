@@ -31,7 +31,7 @@ instruction, but sandbox the loop for real autonomy.
 | `design-doc` | architect + codex critic + GLM critic | Reviewed `docs/design/yyyy-MM-dd-<slug>.md` (design-doc skill; no code, no commits) |
 | `implement` | planner + builder + codex critic + simplifier | Task-per-iteration implementation, tests mandatory; one bounded simplification pass before completion |
 | `implement-plus` | … + GLM critic | Same, two review gates |
-| `tdd` | planner + builder + codex critic | Red→green vertical slices per the tdd skill |
+| `tdd` | planner + builder + codex critic | Red→green vertical slices per the test-driven-dev skill |
 | `tdd-plus` | … + GLM critic | Same, two review gates |
 
 ```bash
@@ -105,8 +105,8 @@ deliberately (source: `ralph` repo `presets/*.yml`).
   only then does the loop complete. (tdd stays without it by design — its skill
   keeps refactoring out of the loop.)
 - Skills are name-dropped, never copied — the `design-doc` method (research rules,
-  document template), `tdd` semantics (seams, vertical slices, no refactor phase)
-  and `domain-modeling`'s CONTEXT.md vocabulary live in the skills under
+  document template), `test-driven-dev` semantics (seams, vertical slices, no refactor phase)
+  and `domain-modeling`'s Terminology-section vocabulary live in the skills under
   `../skills/`, the single source of truth. Hats add only loop mechanics
   (triggers, payloads, emits, verdict gates).
 - Critics emit via `"$RALPH_BIN" emit` and stop immediately after emitting
