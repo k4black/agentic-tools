@@ -195,23 +195,27 @@ fi
 # (permissions merge additively across scopes; no CLI exists for rules, and the
 # docs name editing settings.json as the supported mechanism). Merge only ADDS
 # missing rules — user's own rules and all other settings are untouched.
-if command -v claude >/dev/null 2>&1; then
+if command -v claude >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   echo "claude permission allowlist"
-  python3 - "$REPO/permissions/claude-allow.json" "$HOME/.claude/settings.json" <<'PYEOF'
-import json, sys, os
-rules_file, settings_file = sys.argv[1], sys.argv[2]
-rules = json.load(open(rules_file))
-settings = json.load(open(settings_file)) if os.path.exists(settings_file) else {}
-allow = settings.setdefault("permissions", {}).setdefault("allow", [])
-added = [r for r in rules if r not in allow]
-if added:
-    allow.extend(added)
-    json.dump(settings, open(settings_file, "w"), indent=2)
-    open(settings_file, "a").write("\n")
-    print(f"  added {len(added)} allow rules")
-else:
-    print("  allow rules ok")
-PYEOF
+  SETTINGS="$HOME/.claude/settings.json"
+  [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
+  before="$(jq '.permissions.allow // [] | length' "$SETTINGS")"
+  tmp="$(mktemp)"
+  # append only the missing rules; defaultMode=auto (classifier auto-approve,
+  # NOT bypassPermissions) only when unset, so a manual choice survives re-runs
+  jq --slurpfile rules "$REPO/permissions/claude-allow.json" '
+    .permissions.allow = ((.permissions.allow // []) + ($rules[0] - (.permissions.allow // []))) |
+    .permissions.defaultMode //= "auto"
+  ' "$SETTINGS" > "$tmp"
+  mv "$tmp" "$SETTINGS"
+  after="$(jq '.permissions.allow | length' "$SETTINGS")"
+  if [ "$after" -gt "$before" ]; then
+    echo "  added $((after - before)) allow rules"
+  else
+    echo "  allow rules ok"
+  fi
+else
+  echo "claude or jq not found — skipping permission allowlist"
 fi
 
 # Codex: execpolicy rules file — additive (codex loads every file in ~/.codex/rules/;
@@ -224,6 +228,36 @@ if command -v codex >/dev/null 2>&1; then
     echo "  execpolicy validated (rtk git status -> allow)"
   else
     echo "  warning: codex execpolicy check failed or unsupported — verify manually"
+  fi
+
+  # auto-approve reviewer (risk-assessing subagent, NOT bypass): top-level TOML keys
+  # must precede any [table], so new keys are prepended; existing values updated in place
+  CODEX_CFG="$HOME/.codex/config.toml"
+  touch "$CODEX_CFG"
+  codex_changed=""
+  if grep -qE '^[[:space:]]*approvals_reviewer[[:space:]]*=' "$CODEX_CFG"; then
+    if ! grep -qE '^[[:space:]]*approvals_reviewer[[:space:]]*=[[:space:]]*"auto_review"' "$CODEX_CFG"; then
+      tmp="$(mktemp)"
+      sed 's/^[[:space:]]*approvals_reviewer[[:space:]]*=.*/approvals_reviewer = "auto_review"/' "$CODEX_CFG" > "$tmp"
+      mv "$tmp" "$CODEX_CFG"
+      codex_changed="approvals_reviewer=auto_review"
+    fi
+  else
+    tmp="$(mktemp)"
+    printf 'approvals_reviewer = "auto_review"\n' | cat - "$CODEX_CFG" > "$tmp"
+    mv "$tmp" "$CODEX_CFG"
+    codex_changed="approvals_reviewer=auto_review"
+  fi
+  if ! grep -qE '^[[:space:]]*approval_policy[[:space:]]*=' "$CODEX_CFG"; then
+    tmp="$(mktemp)"
+    printf 'approval_policy = "on-request"\n' | cat - "$CODEX_CFG" > "$tmp"
+    mv "$tmp" "$CODEX_CFG"
+    codex_changed="$codex_changed approval_policy=on-request"
+  fi
+  if [ -n "$codex_changed" ]; then
+    echo "  codex: set $codex_changed"
+  else
+    echo "  codex: approvals ok"
   fi
 fi
 
