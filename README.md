@@ -16,23 +16,20 @@ Re-run it any time: after `git pull`, after adding a skill, after installing a n
 | Harness | Skills | Global rules |
 |---|---|---|
 | Claude Code | `~/.claude/skills/*` (symlinks) | `~/.claude/CLAUDE.md` → `GLOBAL-AGENTS.md` |
-| Codex CLI | `~/.codex/skills/*` + `~/.agents/skills/*` (symlinks) | `~/.codex/AGENTS.md` → `GLOBAL-AGENTS.md`, `hooks.json` |
+| Codex CLI | `~/.codex/skills/*` + `~/.agents/skills/*` (symlinks) | `~/.codex/AGENTS.md` → `GLOBAL-AGENTS.md` |
 | OpenCode | reads `~/.claude/skills` + `~/.agents/skills` natively | `~/.config/opencode/AGENTS.md` → `GLOBAL-AGENTS.md` |
-| Cursor | `~/.cursor/skills/*` (copies — symlink discovery is buggy) | per-project only (no global file support) |
-| Kilo Code | `~/.kilocode/skills/*`, `~/.kilo/skills/*` (copies) | `~/.kilocode/rules/global-agents.md` (copy) |
 
-It also merges into `~/.claude/settings.json`: the RTK PreToolUse hook, third-party marketplaces,
-and the enabled-plugin list — so a fresh machine gets the full plugin set in one run.
+Tool configuration is never hand-edited: the RTK hook is installed by `rtk init`, and Claude Code
+marketplaces/plugins are installed through the `claude plugin` CLI — so a fresh machine gets the
+full setup in one run.
 
-Symlink-based harnesses track this repo live (edit a SKILL.md, it's live everywhere).
-Copy-based harnesses (Cursor, Kilo) re-sync on each `install.sh` run.
+Everything is symlinked, so the harnesses track this repo live (edit a SKILL.md, it's live everywhere).
 
 ## Layout
 
 ```
 skills/            canonical skill tree — agentskills.io spec, one folder per skill
 GLOBAL-AGENTS.md   single source of truth for global rules (git conventions, RTK usage)
-codex-hooks.json   Codex CLI hooks (→ ~/.codex/hooks.json)
 ralph/             reusable ralph-orchestrator templates (scaffold)
 install.sh         the idempotent bootstrap
 ```

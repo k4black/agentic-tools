@@ -1,11 +1,8 @@
 # Global Agent Rules
 
-Single source of truth for all agent harnesses. Installed by `install.sh` as
-`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`, `~/.kilocode/rules/global-agents.md`.
-
 ## Git
 
-- Use Conventional Commits 1.0.0: `<type>[optional scope]: <description>` (e.g. `feat(lang): add Polish language`). No long commit bodies.
+- Use Conventional Commits 1.0.0: `<type>[optional scope]: <description>` (e.g. `feat(lang): add Polish language`). Keep the first line ≤ 72 characters; no long commit bodies.
 - Never add AI-attribution strings to commits or PRs: no `Co-Authored-By: Claude/Codex/...`, no "Generated with ..." footers.
 - Commit only when explicitly asked, or when the active workflow/skill inherently requires commits (e.g. babysit-pr, critique-loop).
 

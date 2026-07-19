@@ -1,19 +1,13 @@
 #!/usr/bin/env bash
 # One idempotent run hooks every agent harness on this machine:
-#   Claude Code, Codex CLI, OpenCode, Cursor, Kilo Code (+ anything reading ~/.agents/skills).
+#   Claude Code, Codex CLI, OpenCode (+ anything reading ~/.agents/skills).
 # Safe to re-run any time (after git pull, after adding a skill, on a fresh machine).
 #
 #   skills/*            -> symlinked into ~/.claude/skills, ~/.agents/skills, ~/.codex/skills
 #                          (OpenCode reads ~/.claude/skills + ~/.agents/skills natively)
-#                       -> COPIED into ~/.cursor/skills, ~/.kilocode/skills, ~/.kilo/skills
-#                          (both tools have known bugs with symlinked skills)
-#   GLOBAL-AGENTS.md    -> ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, ~/.config/opencode/AGENTS.md,
-#                          ~/.kilocode/rules/global-agents.md (copy)
-#   codex-hooks.json    -> ~/.codex/hooks.json
-#   Claude settings.json: merges RTK PreToolUse hook, marketplaces, enabled plugins
-#                         (removes the legacy kchernyshev-dotfiles marketplace/plugin).
-#
-# Copy-based harnesses (Cursor, Kilo) get a fresh sync each run; symlink-based ones track git live.
+#   GLOBAL-AGENTS.md    -> ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, ~/.config/opencode/AGENTS.md
+#   rtk hook            -> installed by rtk's own installer (rtk init)
+#   Claude plugins      -> installed via the claude CLI (marketplaces + plugins)
 
 set -euo pipefail
 
@@ -33,11 +27,11 @@ link() {
   echo "  linked $linkpath -> $target"
 }
 
-# --- 1. skills: symlink harnesses -------------------------------------------
+# --- 1. skills: symlink into every harness dir -------------------------------
 
 for dst in "$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.codex/skills"; do
   mkdir -p "$dst"
-  echo "skills -> $dst (symlinks)"
+  echo "skills -> $dst"
   for skill in "$SKILLS_SRC"/*/; do
     [ -d "$skill" ] || continue
     link "${skill%/}" "$dst/$(basename "$skill")"
@@ -53,24 +47,7 @@ for dst in "$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.codex/skills"; 
   done
 done
 
-# --- 2. skills: copy harnesses (symlink discovery is broken there) ----------
-
-for root in "$HOME/.cursor" "$HOME/.kilocode" "$HOME/.kilo"; do
-  [ -d "$root" ] || continue   # only for tools actually present; re-run after installing one
-  dst="$root/skills"
-  mkdir -p "$dst"
-  echo "skills -> $dst (copies)"
-  for skill in "$SKILLS_SRC"/*/; do
-    [ -d "$skill" ] || continue
-    name="$(basename "$skill")"
-    # drop a stale symlink from an earlier scheme, then sync a real copy
-    [ -L "$dst/$name" ] && rm "$dst/$name"
-    rsync -a --delete --exclude='.venv' --exclude='__pycache__' "$skill" "$dst/$name/"
-    echo "  synced $dst/$name"
-  done
-done
-
-# --- 3. global rules ---------------------------------------------------------
+# --- 2. global rules ----------------------------------------------------------
 
 echo "global rules"
 mkdir -p "$HOME/.claude" "$HOME/.codex"
@@ -79,77 +56,60 @@ link "$REPO/GLOBAL-AGENTS.md" "$HOME/.codex/AGENTS.md"
 if [ -d "$HOME/.config/opencode" ]; then
   link "$REPO/GLOBAL-AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
 fi
-if [ -d "$HOME/.kilocode" ]; then
-  mkdir -p "$HOME/.kilocode/rules"
-  cp "$REPO/GLOBAL-AGENTS.md" "$HOME/.kilocode/rules/global-agents.md"
-  echo "  copied ~/.kilocode/rules/global-agents.md"
+
+# --- 3. rtk hook (rtk's own installer; no hand-edited configs) ---------------
+
+if command -v rtk >/dev/null 2>&1; then
+  echo "rtk hook (rtk init)"
+  rtk init -g --hook-only
+else
+  echo "rtk not installed — skipping hook setup (install rtk, then re-run)"
 fi
 
-# --- 4. codex hooks ----------------------------------------------------------
+# --- 4. Claude Code marketplaces + plugins (via claude CLI, never hand-edits) -
 
-link "$REPO/codex-hooks.json" "$HOME/.codex/hooks.json"
+if command -v claude >/dev/null 2>&1; then
+  echo "claude marketplaces"
+  marketplaces="$(claude plugin marketplace list 2>/dev/null || true)"
+  add_marketplace() {
+    local name="$1" source="$2"
+    if ! grep -q "$name" <<<"$marketplaces"; then
+      claude plugin marketplace add "$source" && echo "  added marketplace $name"
+    else
+      echo "  marketplace $name ok"
+    fi
+  }
+  add_marketplace "litestar" "litestar-org/litestar-skills"
+  add_marketplace "elastic-agent-skills" "elastic/agent-skills"
 
-# --- 5. Claude Code settings: hooks, marketplaces, plugins -------------------
+  # legacy sources, superseded by this repo / dropped
+  for legacy in kchernyshev-dotfiles apple-notes-mcp; do
+    if grep -q "$legacy" <<<"$marketplaces"; then
+      claude plugin marketplace remove "$legacy" && echo "  removed legacy marketplace $legacy"
+    fi
+  done
 
-echo "claude settings merge"
-python3 - <<'PY'
-import json, os
-
-path = os.path.expanduser("~/.claude/settings.json")
-try:
-    with open(path) as f:
-        s = json.load(f)
-except FileNotFoundError:
-    s = {}
-before = json.dumps(s, sort_keys=True)
-
-# RTK PreToolUse hook (Claude-only; other harnesses use manual rtk prefixing per GLOBAL-AGENTS.md)
-pre = s.setdefault("hooks", {}).setdefault("PreToolUse", [])
-rtk = {"matcher": "Bash", "hooks": [{"type": "command", "command": "rtk hook claude"}]}
-if not any(
-    h.get("matcher") == "Bash"
-    and any(x.get("command") == "rtk hook claude" for x in h.get("hooks", []))
-    for h in pre
-):
-    pre.append(rtk)
-
-# Third-party marketplaces this setup depends on
-mk = s.setdefault("extraKnownMarketplaces", {})
-for name, repo in {
-    "apple-notes-mcp": "sweetrb/apple-notes-mcp",
-    "litestar": "litestar-org/litestar-skills",
-    "elastic-agent-skills": "elastic/agent-skills",
-}.items():
-    mk.setdefault(name, {"source": {"source": "github", "repo": repo}})
-
-# Third-party plugins to enable
-ep = s.setdefault("enabledPlugins", {})
-for plugin in [
-    "superpowers@claude-plugins-official",
-    "code-simplifier@claude-plugins-official",
-    "claude-md-management@claude-plugins-official",
-    "feature-dev@claude-plugins-official",
-    "frontend-design@claude-plugins-official",
-    "atlassian@claude-plugins-official",
-    "apple-notes@apple-notes-mcp",
-    "elastic-elasticsearch@elastic-agent-skills",
-    "elastic-kibana@elastic-agent-skills",
-    "elastic-observability@elastic-agent-skills",
-]:
-    ep.setdefault(plugin, True)
-
-# Legacy dotfiles plugin path — superseded by this repo's symlinked skills
-mk.pop("kchernyshev-dotfiles", None)
-ep.pop("personal@kchernyshev-dotfiles", None)
-
-after = json.dumps(s, sort_keys=True)
-if after != before:
-    with open(path, "w") as f:
-        json.dump(s, f, indent=2)
-        f.write("\n")
-    print("  updated ~/.claude/settings.json")
-else:
-    print("  ~/.claude/settings.json already up to date")
-PY
+  echo "claude plugins"
+  installed="$(claude plugin list 2>/dev/null || true)"
+  for plugin in \
+    superpowers@claude-plugins-official \
+    code-simplifier@claude-plugins-official \
+    claude-md-management@claude-plugins-official \
+    feature-dev@claude-plugins-official \
+    frontend-design@claude-plugins-official \
+    atlassian@claude-plugins-official \
+    elastic-elasticsearch@elastic-agent-skills \
+    elastic-kibana@elastic-agent-skills \
+    elastic-observability@elastic-agent-skills \
+  ; do
+    if ! grep -q "${plugin%%@*}" <<<"$installed"; then
+      claude plugin install "$plugin" && echo "  installed $plugin"
+    else
+      echo "  $plugin ok"
+    fi
+  done
+else
+  echo "claude CLI not installed — skipping plugin setup (install claude, then re-run)"
+fi
 
 echo "done — all detected harnesses are wired."
