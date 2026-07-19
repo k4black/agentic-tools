@@ -5,22 +5,52 @@ No external dependencies — only stdlib.
 """
 
 import json
+import os
+import urllib.error
 import urllib.request
 from typing import Any, Iterable
 
-ANKI_CONNECT_URL = "http://localhost:8765"
+
+def _candidate_urls() -> list[str]:
+    """Endpoints tried in order until one answers, so the same skill works from a
+    Mac (Anki on localhost) and from inside a container where AnkiConnect is a
+    sibling service reachable as `anki`. An explicit ANKI_CONNECT_URL wins."""
+    urls: list[str] = []
+    env = os.environ.get("ANKI_CONNECT_URL")
+    if env:
+        urls.append(env)
+    for u in ("http://localhost:8765", "http://anki:8765"):
+        if u not in urls:
+            urls.append(u)
+    return urls
+
+
+ANKI_CONNECT_URLS = _candidate_urls()
+ANKI_CONNECT_URL = ANKI_CONNECT_URLS[0]  # primary (back-compat); requests fall back across all
+_resolved_url: str | None = None
 
 
 def anki_request(action: str, **params: Any) -> Any:
+    global _resolved_url
     payload = json.dumps({"action": action, "version": 6, "params": params}).encode()
-    req = urllib.request.Request(
-        ANKI_CONNECT_URL, data=payload, headers={"Content-Type": "application/json"}
-    )
-    with urllib.request.urlopen(req) as resp:
-        body = json.loads(resp.read())
-    if body.get("error"):
-        raise RuntimeError(f"AnkiConnect error: {body['error']}")
-    return body["result"]
+    # Once one endpoint answers, stick to it for the rest of the process.
+    urls = [_resolved_url] if _resolved_url else ANKI_CONNECT_URLS
+    last_err: Exception | None = None
+    for url in urls:
+        req = urllib.request.Request(
+            url, data=payload, headers={"Content-Type": "application/json"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = json.loads(resp.read())
+        except (urllib.error.URLError, ConnectionError, OSError) as exc:
+            last_err = exc
+            continue  # connection failed — try the next candidate endpoint
+        _resolved_url = url
+        if body.get("error"):
+            raise RuntimeError(f"AnkiConnect error: {body['error']}")
+        return body["result"]
+    raise RuntimeError(f"AnkiConnect unreachable (tried {urls}): {last_err}")
 
 
 def notes_info(note_ids: Iterable[int]) -> list[dict]:
