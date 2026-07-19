@@ -112,4 +112,27 @@ else
   echo "claude CLI not installed — skipping plugin setup (install claude, then re-run)"
 fi
 
+# --- 5. MCP servers (via each CLI, never hand-edits) --------------------------
+
+# Dart/Flutter MCP server (https://docs.flutter.dev/ai/mcp-server), needs Dart >= 3.9
+if command -v dart >/dev/null 2>&1; then
+  echo "mcp servers"
+  if command -v claude >/dev/null 2>&1; then
+    if ! claude mcp list 2>/dev/null | grep -q '^dart:'; then
+      claude mcp add --scope user --transport stdio dart -- dart mcp-server && echo "  claude: added dart"
+    else
+      echo "  claude: dart ok"
+    fi
+  fi
+  if command -v codex >/dev/null 2>&1; then
+    if ! codex mcp list 2>/dev/null | grep -q 'dart'; then
+      codex mcp add dart -- dart mcp-server --force-roots-fallback && echo "  codex: added dart"
+    else
+      echo "  codex: dart ok"
+    fi
+  fi
+else
+  echo "dart not installed — skipping Dart/Flutter MCP server"
+fi
+
 echo "done — all detected harnesses are wired."

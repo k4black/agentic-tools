@@ -19,9 +19,9 @@ Re-run it any time: after `git pull`, after adding a skill, after installing a n
 | Codex CLI | `~/.codex/skills/*` + `~/.agents/skills/*` (symlinks) | `~/.codex/AGENTS.md` → `GLOBAL-AGENTS.md` |
 | OpenCode | reads `~/.claude/skills` + `~/.agents/skills` natively | `~/.config/opencode/AGENTS.md` → `GLOBAL-AGENTS.md` |
 
-Tool configuration is never hand-edited: the RTK hook is installed by `rtk init`, and Claude Code
-marketplaces/plugins are installed through the `claude plugin` CLI — so a fresh machine gets the
-full setup in one run.
+Tool configuration is never hand-edited: the RTK hook is installed by `rtk init`, Claude Code
+marketplaces/plugins through the `claude plugin` CLI, and MCP servers (Dart/Flutter) through
+`claude mcp add` / `codex mcp add` — so a fresh machine gets the full setup in one run.
 
 Everything is symlinked, so the harnesses track this repo live (edit a SKILL.md, it's live everywhere).
 
