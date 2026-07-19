@@ -5,121 +5,56 @@ description: Use when the user wants to add, view, complete, or organize items i
 
 # Apple Reminders
 
-Add items to any Apple Reminders list, view existing reminders, mark items complete, and create new lists. Pure AppleScript via `osascript` — no external deps.
+Add, view, complete, and organize Apple Reminders. Pure AppleScript via `osascript`, no external deps (macOS + Reminders app). Adapted from [densign01/reminders-skill](https://github.com/densign01/reminders-skill).
 
-Adapted from [densign01/reminders-skill](https://github.com/densign01/reminders-skill).
-
-## Determine the action
-
-Parse the request:
-
-1. **Add items** — "add X to my list", "remind me to X", "todo: X"
-2. **View items** — "what's on my list", "show reminders", "what do I need to do"
-3. **Complete items** — "mark X done", "complete X", "I did X"
-4. **List all lists** — "what lists do I have", "show my reminder lists"
-
-## List all available lists
+## Read
 
 ```bash
+# All list names
+osascript -e 'tell application "Reminders" to get name of every list'
+
+# Open items on a list (with due dates)
 osascript -e 'tell application "Reminders"
-    set listNames to {}
-    repeat with l in lists
-        set end of listNames to name of l
+    set out to {}
+    repeat with r in (reminders in list "LIST_NAME" whose completed is false)
+        set n to name of r
+        if due date of r is not missing value then set n to n & " (due: " & (due date of r as string) & ")"
+        set end of out to n
     end repeat
-    return listNames
+    return out
 end tell'
 ```
 
-## View items on a list
+## Add items
 
-```bash
-osascript -e 'tell application "Reminders"
-    set targetList to list "LIST_NAME"
-    set reminderInfo to {}
-    repeat with r in (reminders in targetList whose completed is false)
-        set reminderName to name of r
-        set dueDate to due date of r
-        if dueDate is not missing value then
-            set reminderName to reminderName & " (due: " & (dueDate as string) & ")"
-        end if
-        set end of reminderInfo to reminderName
-    end repeat
-    return reminderInfo
-end tell'
-```
+1. **Pick the list** — if unspecified, ask, showing available lists.
+2. **Dedupe** — fetch open items (query above); case-insensitive partial match.
+3. **Parse** — bullet/comma items, due dates ("tomorrow", "in 3 days", "Jan 15"), notes (after a dash or in parens).
+4. **Confirm the plan before mutating**:
 
-## Add items to a list
+   ```
+   ## Adding to [List Name] (X new items)
+   **Will add:** - Item 1  - Item 2 (due: tomorrow)
+   **Already on list (skipping):** - ~~Item 3~~
+   ```
 
-**Step 1 — Pick the list.** If unspecified, ask the user, showing available lists from the query above.
-
-**Step 2 — Check existing items to avoid duplicates** (case-insensitive partial match):
-
-```bash
-osascript -e 'tell application "Reminders"
-    set targetList to list "LIST_NAME"
-    set reminderNames to {}
-    repeat with r in (reminders in targetList whose completed is false)
-        set end of reminderNames to name of r
-    end repeat
-    return reminderNames
-end tell'
-```
-
-**Step 3 — Parse items.** Extract bullet/comma items, due dates ("tomorrow", "in 3 days", "Jan 15"), and notes (after a dash or in parens).
-
-**Step 4 — Present the plan and confirm:**
-
-```
-## Adding to [List Name] (X new items)
-
-**Will add:**
-- Item 1
-- Item 2 (due: tomorrow)
-
-**Already on list (skipping):**
-- ~~Item 3~~
-```
-
-**Step 5 — Add via AppleScript.** Without due date:
-
-```bash
-osascript -e 'tell application "Reminders"
-    set targetList to list "LIST_NAME"
-    make new reminder in targetList with properties {name:"ITEM_NAME"}
-end tell'
-```
-
-With due date:
-
-```bash
-osascript <<'EOF'
-tell application "Reminders"
-    set targetList to list "LIST_NAME"
-    set dueDate to (current date) + (1 * days)  -- tomorrow
-    make new reminder in targetList with properties {name:"ITEM_NAME", due date:dueDate}
-end tell
-EOF
-```
-
-Batch insert (more efficient for multiple items):
+5. **Add** (batch multiple items in one call):
 
 ```bash
 osascript <<'EOF'
 tell application "Reminders"
     set targetList to list "LIST_NAME"
     make new reminder in targetList with properties {name:"Item 1"}
-    make new reminder in targetList with properties {name:"Item 2"}
-    make new reminder in targetList with properties {name:"Item 3", due date:(current date) + (1 * days)}
+    make new reminder in targetList with properties {name:"Item 2", due date:(current date) + (1 * days)}
 end tell
 EOF
 ```
 
-## Mark an item complete
+## Complete an item
 
 ```bash
 osascript -e 'tell application "Reminders"
-    set targetList to list "LIST_NAME"
-    repeat with r in (reminders in targetList whose completed is false)
+    repeat with r in (reminders in list "LIST_NAME" whose completed is false)
         if name of r contains "SEARCH_TERM" then
             set completed of r to true
             return "Completed: " & name of r
@@ -129,41 +64,25 @@ osascript -e 'tell application "Reminders"
 end tell'
 ```
 
-## Create a new list
+## Create a list
 
 ```bash
-osascript -e 'tell application "Reminders"
-    make new list with properties {name:"LIST_NAME"}
-end tell'
+osascript -e 'tell application "Reminders" to make new list with properties {name:"LIST_NAME"}'
 ```
 
 ## Date parsing
 
 | Input | AppleScript |
 |-------|-------------|
-| today | `(current date)` |
-| tomorrow | `(current date) + (1 * days)` |
-| next week | `(current date) + (7 * days)` |
+| today / tomorrow / next week | `(current date)` / `+ (1 * days)` / `+ (7 * days)` |
 | in X days | `(current date) + (X * days)` |
-| Monday, Tuesday, … | calculate days until that weekday |
-| Jan 15, March 3, … | parse and construct date object |
+| Monday, Tuesday, … | days until that weekday |
+| Jan 15, March 3, … | construct a date object |
 
-For specific times:
+Specific time: `set hours of dueDate to 14` / `set minutes of dueDate to 0`.
 
-```applescript
-set dueDate to (current date) + (1 * days)
-set hours of dueDate to 14  -- 2 PM
-set minutes of dueDate to 0
-```
+## Rules
 
-## Workflow rules
-
-- Always confirm the plan before mutating (showing what will be added/skipped).
-- Duplicate detection is case-insensitive, partial match.
-- Due dates are optional.
-- If the user references a list that doesn't exist, offer to create it rather than silently failing.
-
-## Requirements
-
-- macOS, Apple Reminders app
-- No external dependencies (`osascript` only)
+- Always confirm the add-plan before mutating (show adds + skips).
+- Due dates optional; dedupe is case-insensitive partial match.
+- Referenced list doesn't exist → offer to create it, never fail silently.

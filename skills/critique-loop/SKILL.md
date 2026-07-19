@@ -7,232 +7,117 @@ allowed-tools: Bash(codex exec *) Bash(codex exec resume *) Bash(cursor-agent *)
 argument-hint: "Task to drive, or empty to review the current diff"
 ---
 
-Cross-model critique loop: Claude drives, a second model (the **navigator**) adversarially reviews. The same navigator session persists across rounds so it retains context. Two flows:
+Cross-model critique loop: Claude drives, a second model (the **navigator**) adversarially reviews in one persistent session. Two flows:
 
-- **Full flow** — plan → navigator reviews plan → (fix or ask user) → **user approves the plan** → implement → navigator reviews the diff → (fix or ask user) → done. All phases share one navigator session.
-- **Review-only flow** — no plan, no implementation; the navigator adversarially reviews an existing diff and Claude fixes what's actionable. See **Review-only flow** at the end.
+- **Full flow** — plan → navigator reviews plan → (fix or ask user) → **user approves** → implement → navigator reviews diff → done.
+- **Review-only flow** — navigator reviews an existing diff, Claude fixes what's actionable (see end).
 
 ## Configuration
 
-Defaults live here — edit to override. Everything below reads from these.
-
-- **Navigator CLI:** `codex` (options: `codex` | `cursor`)
-- **Navigator model:** *not pinned.* The navigator runs on the CLI's configured default (`~/.codex/config.toml` / Cursor settings). Keep that default on the **latest available model with high reasoning effort** — do not downgrade it to coax an easier verdict.
-- **Artifact directory:** `.critique-loop/` — **local working state only, gitignored**. Not committed; not part of the PR. Added to `.gitignore` on first run (Step 1).
-- **Slug:** current git branch name, or a kebab-case identifier derived from the task if on `main`/`master`.
-- **Plan file path:** `.critique-loop/<slug>-plan.md` (default — **ephemeral mode**, gitignored, never committed).
-  Override to a repo path like `docs/plans/<slug>.md` for **repo mode** — the plan becomes a committed design doc (`docs: plan for <slug>` / `docs: revise plan for <slug> (round N)`). Pick repo mode when the plan should be reviewable in the PR.
-
-Session-id file: `.critique-loop/<slug>.session-id` (created on first call, reused on every resume).
+- **Navigator CLI:** `codex` (options: `codex` | `cursor`). **Model:** not pinned — the CLI's configured default; keep that on the latest model with high reasoning effort, never downgrade to coax an easier verdict.
+- **Artifacts:** `.critique-loop/` — local working state, gitignored on first run, never part of the PR. Session id: `.critique-loop/<slug>.session-id`.
+- **Slug:** current branch name (slash-sanitized), or kebab-case from the task if on `main`/`master`.
+- **Plan file:** `.critique-loop/<slug>-plan.md` — always ephemeral (gitignored, never committed). If the plan deserves to be a committed deliverable, that's a design doc: use the `design-doc` skill (`docs/design/yyyy-MM-dd-<slug>.md`) and run critique-loop on it.
 
 ### Navigator adapter
 
-The skill body refers to two abstract operations: **START-SESSION** (first call, creates the session) and **RESUME-SESSION** (every follow-up). All navigators accept the same inputs: `<PROMPT>`, `<OUTPUT_FILE>`, `<SLUG>`.
+Two abstract ops — **START-SESSION** (first call) and **RESUME-SESSION** (every follow-up) — taking `<PROMPT>`, `<OUTPUT_FILE>`, `<SLUG>`.
 
-#### If Navigator CLI = `codex` (default)
-
-- **Sandbox:** `read-only` (navigator reviews; it does not write code)
-- **Model / effort:** CLI defaults (see Configuration)
-
-**START-SESSION** (tee the log, grep the session ID after the call; `pipefail` so a codex failure isn't masked by `tee`):
+**codex** (default; sandbox `read-only` — navigator never writes):
 
 ```bash
+# START-SESSION — pipefail so a codex failure isn't masked by tee
 set -o pipefail
-codex exec \
-  --sandbox read-only \
-  -o <OUTPUT_FILE> \
-  "<PROMPT>" \
-  < /dev/null \
-  2>&1 | tee .critique-loop/<SLUG>.nav.log
-
+codex exec --sandbox read-only -o <OUTPUT_FILE> "<PROMPT>" \
+  < /dev/null 2>&1 | tee .critique-loop/<SLUG>.nav.log
 grep -oE 'session id: [0-9a-f-]{36}' .critique-loop/<SLUG>.nav.log \
   | head -1 | awk '{print $3}' > .critique-loop/<SLUG>.session-id
-```
 
-**RESUME-SESSION**:
-
-```bash
+# RESUME-SESSION — resume takes -c overrides, NOT --sandbox (errors out)
 SID=$(cat .critique-loop/<SLUG>.session-id)
-codex exec resume "$SID" \
-  -c sandbox_mode='"read-only"' \
-  -o <OUTPUT_FILE> \
-  "<PROMPT>" \
-  < /dev/null
+codex exec resume "$SID" -c sandbox_mode='"read-only"' -o <OUTPUT_FILE> "<PROMPT>" < /dev/null
 ```
 
-> **Why `< /dev/null`?** `codex exec` reads from stdin in addition to the positional prompt. When the parent agent leaves stdin open, codex blocks indefinitely on `Reading additional input from stdin...` — symptom: a codex process alive for minutes with no log output. Closing stdin is mandatory for non-interactive use.
+`< /dev/null` is mandatory: codex also reads stdin and blocks forever ("Reading additional input from stdin...") when the parent leaves it open.
 
-> **Why `-c sandbox_mode` on resume but `--sandbox` on the first call?** `codex exec resume` does not accept `--sandbox`; it only takes `-c` config overrides (value parsed as TOML, hence the inner quotes). Passing `--sandbox` to `resume` errors out with a help dump.
-
-#### If Navigator CLI = `cursor`
-
-- **Mode:** `plan` (read-only), `--trust` for headless, output format `text`
-- **Model:** CLI default (omit `--model` unless the user pins one)
-
-**START-SESSION** (pre-create chat, then run with `--resume`):
+**cursor** (`--mode plan` read-only, `--trust` headless):
 
 ```bash
+# START-SESSION — pre-create chat; RESUME-SESSION is the identical command
 cursor-agent create-chat > .critique-loop/<SLUG>.session-id
 SID=$(cat .critique-loop/<SLUG>.session-id)
-cursor-agent -p --trust \
-  --mode plan \
-  --output-format text \
-  --resume "$SID" \
-  "<PROMPT>" \
-  > <OUTPUT_FILE>
+cursor-agent -p --trust --mode plan --output-format text --resume "$SID" "<PROMPT>" > <OUTPUT_FILE>
 ```
 
-**RESUME-SESSION**: identical invocation (the chat already exists).
-
-After either START-SESSION: if the command exited non-zero, stop and surface the error (do not proceed to session-id extraction). Then verify `.critique-loop/<SLUG>.session-id` is non-empty before continuing. If empty, surface the raw output to the user and stop.
+After START-SESSION: non-zero exit → stop and surface the error. Empty session-id file → surface raw output and stop.
 
 ## Prerequisites
 
-- Navigator CLI installed and authenticated. Smoke tests:
-  - **Codex:** `codex exec --sandbox read-only "reply OK" < /dev/null` prints `OK`.
-  - **Cursor:** `cursor-agent -p --trust --mode plan "reply with exactly: OK"` prints `OK`.
-- Current directory is a git repo; current branch is not `main`/`master` (if it is, ask the user for a branch name and slug first).
+- Navigator authenticated. Smoke test: `codex exec --sandbox read-only "reply OK" < /dev/null` / `cursor-agent -p --trust --mode plan "reply with exactly: OK"`.
+- Git repo, not on `main`/`master` (else ask the user for a branch + slug).
 
 ## Cross-round issue tracking
 
-Applies to every CHANGES_REQUESTED round in any flow. Maintain an internal log across rounds:
+Applies to every CHANGES_REQUESTED round. Keep an internal log: every ask ever raised (file + location + description), action taken (fixed / pushed back / surfaced), raised→resolved→re-raised history. Rules:
 
-- **All asks ever raised** — indexed by file + location + description.
-- **Actions taken** — fixed, pushed back, surfaced to user.
-- **Ask history** — track raised → resolved → re-raised patterns.
-
-Rules:
-
-1. **Print all asks from the current round before acting on any of them** — file, location, description — so the user has full visibility.
-2. **Recurring ask you already fixed** — the navigator may have missed the fix. Point it at the exact commit/lines in your driver response; if you are confident the fix is correct, do not redo it.
-3. **Oscillating ask** (navigator flip-flops: raise → drop → re-raise, or suggests contradictory fixes across rounds) — do NOT keep changing the code back and forth. Document it in place (using the file's native comment syntax — `#`, `//`, `<!-- -->`, …) and move on:
+1. **Print all of the round's asks before acting on any** — full user visibility.
+2. **Recurring ask you already fixed** — navigator likely missed the fix; point at the exact commit/lines in the driver response, don't redo it.
+3. **Oscillating ask** (raise → drop → re-raise, or contradictory fixes across rounds) — don't ping-pong the code. Document in place with the file's native comment syntax and ignore it in future rounds:
 
    ```
-   # NOTE(critique-loop): navigator oscillated on this.
-   # Round N: suggested X. Round M: suggested Y.
-   # Keeping current implementation.
+   # NOTE(critique-loop): navigator oscillated (round N: X, round M: Y). Keeping current implementation.
    ```
-
-   Mark it resolved in your log and ignore it in all future rounds.
-4. **Disagreement you can't resolve** — if you disagree with an ask and it isn't worth a user interruption, leave a `TODO(critique-loop): <why skipped>` comment at the site (file's native comment syntax; for commentless formats like JSON, record it in the driver-response notes instead) and say so in the driver response. Product/architecture disagreements still go to the user (Step 6 classification).
-5. **Stuck detection** — before each new round, check: same asks repeating 3+ rounds? all remaining asks oscillating/skipped? ask count not shrinking despite fixes? If any is true, exit the loop early and report why instead of burning rounds.
+4. **Unresolved disagreement not worth a user interruption** — `TODO(critique-loop): <why skipped>` comment at the site (commentless formats like JSON: record in the driver response instead); say so in the driver response. Product/architecture disagreements still go to the user (Step 6).
+5. **Stuck detection** — before each round: same asks 3+ rounds? all remaining asks oscillating/skipped? ask count not shrinking? Any yes → exit early and report why.
 
 ## Phase 1: Draft the plan
 
-### Step 1: Scope the task, pick the slug, gitignore artifacts
-
-Read the task from the user's request. Explore the repo enough to write a concrete plan (real file paths, existing patterns). Don't implement yet.
+**Step 1 — setup.** Read the task; explore the repo enough for a concrete plan (real paths, existing patterns). Don't implement.
 
 ```bash
-SLUG=$(git branch --show-current | tr '/' '-')   # filesystem-safe: feature/foo -> feature-foo
-# If on main/master, ask user for a branch + slug
+SLUG=$(git branch --show-current | tr '/' '-')   # feature/foo -> feature-foo
 mkdir -p .critique-loop
-
 if ! grep -qxE '\.critique-loop/?' .gitignore 2>/dev/null; then
   echo ".critique-loop/" >> .gitignore
-  git add .gitignore   # required when .gitignore is newly created (untracked)
-  # pathspec form: commits ONLY .gitignore, never sweeps in other staged work
-  git commit -m "chore: gitignore .critique-loop artifacts" -- .gitignore
+  git add .gitignore   # needed when .gitignore is new (untracked)
+  git commit -m "chore: gitignore .critique-loop artifacts" -- .gitignore  # pathspec: only this file
 fi
 ```
 
-The `.gitignore` commit is the only critique-loop commit that ever lands in the PR **from ephemeral mode**. In repo mode the plan file is also committed (Step 3).
+**Step 2 — write the plan** to the configured plan file. Sections: **Task** (one paragraph), **Context** (repo constraints, prior art), **Approach** (numbered, "edit function X in file Y to do Z" level), **Files to modify** (+ one-line reason), **Verification**, **Open questions** (don't invent answers).
 
-### Step 2: Write the plan
-
-Write to the configured **Plan file path**. Sections:
-
-- **Task** — one paragraph in your own words.
-- **Context** — what the repo constrains (existing patterns, relevant files, prior art).
-- **Approach** — numbered steps at the level of "edit function X in file Y to do Z".
-- **Files to modify** — paths with one-line reason each.
-- **Verification** — how you'll know it worked.
-- **Open questions** — things the user or navigator should weigh in on; don't invent answers.
-
-### Step 3: Commit the plan (repo mode only)
-
-If the plan file lives outside `.critique-loop/`, commit it (`docs: plan for <slug>`). Skip in ephemeral mode.
 
 ## Phase 2: Navigator reviews the plan
 
-### Step 4: First call (creates the session)
-
-Run **START-SESSION** with `<OUTPUT_FILE>` = `.critique-loop/<slug>-plan-review.md` and `<PROMPT>`:
+**Step 4 — START-SESSION**, `<OUTPUT_FILE>` = `.critique-loop/<slug>-plan-review.md`, `<PROMPT>`:
 
 ```
-You are the navigator in an XP pair-programming session. The driver (Claude Code) has written a plan for a task.
+You are the navigator in an XP pair-programming session. The driver (Claude Code) has written a plan.
 
-Read the plan at `${PLAN_FILE_PATH}` and any referenced code in the repo. Be adversarial — probe for:
+Read the plan at `${PLAN_FILE_PATH}` and any referenced code. Be adversarial — probe for: missing edge cases and error paths; risky assumptions or unstated dependencies; scope not matching the task; simpler alternatives; verification steps that wouldn't catch regressions.
 
-- missing edge cases and error paths
-- risky assumptions or unstated dependencies
-- scope that does not match the stated task (too broad, too narrow, misaligned)
-- simpler alternatives the driver may have missed
-- verification steps that would not actually catch regressions
-
-Output format:
-
-1. One-sentence summary of your overall take.
-2. Numbered list of specific asks. For each: **what** is wrong, **why** it matters, and (if you can) **how** you would address it. Reference file paths and line numbers when relevant.
-3. End with EXACTLY one of these lines on its own line, nothing after:
-   - `VERDICT: APPROVE` — plan is solid; driver may implement.
-   - `VERDICT: CHANGES_REQUESTED` — the numbered asks above must be resolved.
-   - `VERDICT: BLOCK` — the plan has a fundamental problem needing human input.
+Output: (1) one-sentence overall take; (2) numbered asks — what is wrong, why it matters, how you'd address it, with file:line refs; (3) end with EXACTLY one line, nothing after:
+- `VERDICT: APPROVE` — driver may implement.
+- `VERDICT: CHANGES_REQUESTED` — asks must be resolved.
+- `VERDICT: BLOCK` — fundamental problem needing human input.
 
 Do not write code. Do not modify files. Review only.
 ```
 
-Substitute `<slug>` and `${PLAN_FILE_PATH}` literally before passing. Verify the session-id file is non-empty.
+Verify the session-id file is non-empty.
 
-### Step 5: Read the verdict
+**Step 5 — read the verdict** (last line of the review file): APPROVE → Step 5b; CHANGES_REQUESTED → Step 6; BLOCK → Step 7. Missing `VERDICT:` line → resume once with "restate your review ending with a single `VERDICT:` line"; if it fails again, stop.
 
-Read `.critique-loop/<slug>-plan-review.md`. Last line is the verdict.
+**Step 5b — user-approval gate.** Navigator approval is not enough. Present: slug + branch, one-sentence summary, decisions made during review, **unresolved open questions (never silently proceed with them)**, plan file path, and "Ready to implement? Say 'go' or tell me what to change." Then: approval → Phase 3; minor edit (wording/trim) → revise, re-present, no navigator round; substantive change → revise and back to Step 6b; pivot/stop → stop. Unsure minor-vs-substantive → another navigator round.
 
-- **`VERDICT: APPROVE`** → Step 5b (user-approval gate).
-- **`VERDICT: CHANGES_REQUESTED`** → Step 6.
-- **`VERDICT: BLOCK`** → Step 7.
-- **No `VERDICT:` line** → resume with "please restate your review ending with a single `VERDICT:` line". If it fails again, stop.
+**Step 6 — resolve CHANGES_REQUESTED.** Apply Cross-round tracking, then classify each ask:
 
-### Step 5b: Wait for user approval
+- **Claude resolves directly:** missing edge case/error path; unclear or out-of-order steps; wrong paths/names/stale refs; missing test/verification; simpler alternative preserving the goal; in-task scope trim.
+- **Surface to the user:** product decisions; architecture tradeoffs with no obvious answer; business/domain judgements; anything depending on info outside the repo.
 
-The navigator approved, but the user has final say. Present:
+If any user-surface asks exist, pause: summarize each (ask, why it matters, navigator's options), wait, then fix everything in one pass. Write `.critique-loop/<slug>-driver-response.md` — how each ask was addressed (one line), user answers verbatim, any pushback. Round N = highest `-plan-review-<N>.md`.
 
-- **Slug** and current branch.
-- **One-sentence summary** of what will be implemented.
-- **Decisions made during review** — user answers from Step 6 that shaped the plan (skip if none).
-- **Open questions still unresolved** — from the plan's Open questions section. Do NOT silently proceed with unresolved open questions.
-- **Plan file** path.
-- **Explicit prompt:** "Ready to implement? Say 'go' to proceed, or tell me what to change."
-
-Wait for the user's response.
-
-- **"go" / approves** → Phase 3.
-- **Minor changes** (wording, small scope trim) → revise the plan, show the summary again; no navigator round.
-- **Substantive changes** (new requirement, different approach) → revise and go back to Step 6b for another navigator round.
-- **Pivot or stop** → stop; the plan file stays on disk.
-
-If unsure whether a change is minor or substantive, prefer another navigator round.
-
-### Step 6: Resolve CHANGES_REQUESTED
-
-Apply **Cross-round issue tracking** (print asks first, check for recurrence/oscillation). Then classify each ask:
-
-**Claude resolves directly (no user input):** missing edge case or error path; unclear/out-of-order steps; wrong paths/names/stale references; missing test or verification step; simpler alternative preserving the user's goal; scope trim inside the task.
-
-**Surface to the user (Claude lacks authority):** product decisions; architecture tradeoffs with no obvious right answer; business rules or domain judgements; anything depending on information outside the repo.
-
-**Apply:**
-
-1. If any user-surface asks exist, pause. Summarize each in 2–3 bullets (the ask, why it matters, the navigator's options if any). Wait for the answer, then fix everything in one revision pass.
-2. Otherwise fix directly in the plan file.
-
-Write `.critique-loop/<slug>-driver-response.md`: which asks were addressed and how (one line each); any user answers verbatim; any pushback and why. Round number `N` is tracked by the highest `-plan-review-<N>.md` in `.critique-loop/`.
-
-**Repo mode only:** commit the plan revision (`docs: revise plan for <slug> (round N)`).
-
-### Step 6b: Re-review (resume the same session)
-
-Run **RESUME-SESSION** with `<OUTPUT_FILE>` = `.critique-loop/<slug>-plan-review-<N+1>.md` and `<PROMPT>`:
+**Step 6b — re-review.** RESUME-SESSION, `<OUTPUT_FILE>` = `.critique-loop/<slug>-plan-review-<N+1>.md`:
 
 ```
 I revised the plan based on your review. Updated plan: `${PLAN_FILE_PATH}`. My response to each ask: `.critique-loop/<slug>-driver-response.md`.
@@ -240,75 +125,37 @@ I revised the plan based on your review. Updated plan: `${PLAN_FILE_PATH}`. My r
 Re-review. Note which prior asks are resolved and which remain open. Same output format, end with `VERDICT:`.
 ```
 
-Go back to Step 5.
+Back to Step 5.
 
-### Step 7: Handle BLOCK
-
-Do not loop. Summarize the blocker for the user in 2–4 sentences, include the navigator's suggested direction, stop until the user responds.
+**Step 7 — BLOCK.** Don't loop. Summarize the blocker (2–4 sentences + navigator's suggested direction), stop until the user responds.
 
 ## Phase 3: Implement the approved plan
 
-### Step 8: Record the plan SHA
+**Step 8:** `git rev-parse HEAD > .critique-loop/<slug>.plan-sha` — everything after this is "the implementation".
 
-```bash
-git rev-parse HEAD > .critique-loop/<slug>.plan-sha
-```
+**Step 9:** Implement exactly the approved plan; no scope expansion (note gaps for review, or ask if it's a scope question). Conventional commits, one logical change each. Run lint + tests before the last commit; non-trivial failure → stop and ask.
 
-Everything committed after this point is "the implementation" that Phase 4 diffs against.
-
-### Step 9: Implement
-
-Implement exactly what the approved plan describes. Do not expand scope — note gaps for the review phase, or stop and ask if it's a scope question. Conventional commits, one logical change per commit. Run the project's lint + tests before the last commit; if a failure isn't trivially fixable, stop and ask.
-
-### Step 10: Write the diff summary
-
-Write `.critique-loop/<slug>-diff-summary.md`: commit range (`<plan-sha>..HEAD`), what changed (2–5 bullets), files touched, tests added/updated, anything deferred. Gitignored — do not commit.
+**Step 10:** Write `.critique-loop/<slug>-diff-summary.md`: commit range (`<plan-sha>..HEAD`), what changed (2–5 bullets), files touched, tests, anything deferred. Not committed.
 
 ## Phase 4: Navigator reviews the diff
 
-### Step 11: Resume the session for code review
-
-```bash
-PLAN_SHA=$(cat .critique-loop/<slug>.plan-sha)
-```
-
-Run **RESUME-SESSION** with `<OUTPUT_FILE>` = `.critique-loop/<slug>-code-review.md` and `<PROMPT>`:
+**Step 11 — RESUME-SESSION**, `<OUTPUT_FILE>` = `.critique-loop/<slug>-code-review.md` (with `PLAN_SHA=$(cat .critique-loop/<slug>.plan-sha)`):
 
 ```
 The plan you approved is implemented. Review the diff.
 
-- Plan: `${PLAN_FILE_PATH}`
-- Diff summary: `.critique-loop/<slug>-diff-summary.md`
-- Commit range: `${PLAN_SHA}..HEAD`
+- Plan: `${PLAN_FILE_PATH}`  - Diff summary: `.critique-loop/<slug>-diff-summary.md`  - Commit range: `${PLAN_SHA}..HEAD`
 
-Run `git diff ${PLAN_SHA}..HEAD` and read the changed files. Verify:
+Run `git diff ${PLAN_SHA}..HEAD` and read the changed files. Verify: (a) implementation matches the plan; (b) no scope creep; (c) no bugs, regressions, or missed edge cases; (d) adequate test coverage.
 
-(a) Implementation matches the approved plan.
-(b) No scope creep beyond what the plan approved.
-(c) No introduced bugs, regressions, or missed edge cases.
-(d) Tests cover the changes adequately.
-
-Output format: same as before — numbered asks with file:line references where possible, ending with `VERDICT: APPROVE | CHANGES_REQUESTED | BLOCK`.
+Output format: numbered asks with file:line refs, ending with `VERDICT: APPROVE | CHANGES_REQUESTED | BLOCK`.
 
 Do not write code. Do not modify files. Review only.
 ```
 
-### Step 12: Read the verdict
+**Step 12 — verdict:** APPROVE → Step 14; CHANGES_REQUESTED → Step 13; BLOCK → as Step 7. (Missing-VERDICT handling as Step 5.)
 
-- **`VERDICT: APPROVE`** → Step 14.
-- **`VERDICT: CHANGES_REQUESTED`** → Step 13.
-- **`VERDICT: BLOCK`** → as Step 7: summarize, stop, ask user.
-
-### Step 13: Resolve CHANGES_REQUESTED on code
-
-Apply **Cross-round issue tracking** first (print asks, detect recurrence/oscillation/stuck). Then the Step 6 classification:
-
-- Code-level asks (bugs, missing tests, in-scope refactors, edge cases) → fix directly, conventional commits.
-- Scope / product / architecture asks → surface to the user; wait.
-
-Append to `.critique-loop/<slug>-driver-response.md` (same file; append). After fixes, run project checks (lint, typecheck, tests) — if any fail, fix before resuming the navigator.
-
-Run **RESUME-SESSION** with `<OUTPUT_FILE>` = `.critique-loop/<slug>-code-review-<N+1>.md` and `<PROMPT>`:
+**Step 13 — resolve.** Cross-round tracking first, then Step 6 classification: code-level asks → fix directly (conventional commits); scope/product/architecture → surface and wait. Append to the same driver-response file. Run project checks (lint, typecheck, tests) — fix failures before resuming. RESUME-SESSION, `<OUTPUT_FILE>` = `.critique-loop/<slug>-code-review-<N+1>.md`:
 
 ```
 I addressed your code-review asks. New commits are on top of `${PLAN_SHA}..HEAD`. Response notes appended to `.critique-loop/<slug>-driver-response.md`.
@@ -316,96 +163,64 @@ I addressed your code-review asks. New commits are on top of `${PLAN_SHA}..HEAD`
 Re-review the full diff (`git diff ${PLAN_SHA}..HEAD`). Note which prior asks are resolved and which remain open. Same output format, end with `VERDICT:`.
 ```
 
-Go back to Step 12.
+Back to Step 12.
 
-### Step 14: Approved — report
+**Step 14 — report:**
 
 ```
 ## Critique-loop summary
-- Slug: <slug>
-- Plan rounds: X
-- Code-review rounds: Y
+- Slug: <slug>  Plan rounds: X  Code rounds: Y
 - User questions surfaced: Z (resolved W)
 - Asks fixed / pushed back / oscillating: A / B / C
 - Plan SHA: <plan-sha>  Final HEAD: <head-sha>
 - Artifacts: .critique-loop/<slug>-*.md
 ```
 
-PR / merge / push are out of scope for this skill.
+PR / merge / push are out of scope.
 
 ## Stopping rules
 
-Bail and ask the user when:
+Bail and ask the user when: stuck detection triggers; round counter hits 5 in either phase without APPROVE; `VERDICT:` missing twice in a row (surface raw output); navigator CLI fails (report exact error — no blind retries, no silent CLI switch); session-id file missing/empty after first call (never resume); user's answer to a surfaced question is itself ambiguous (re-ask); Phase 3 lint/tests fail needing judgement outside the plan.
 
-- Stuck detection triggers (see Cross-round issue tracking).
-- Round counter hits 5 in either phase without an APPROVE.
-- Navigator output missing `VERDICT:` twice in a row — surface the raw output.
-- The navigator CLI fails (auth, network, crash) — report the exact error; do not retry blindly; do not silently switch navigator CLIs.
-- The session-id file is missing or empty after the first call — do not try to resume.
-- The user's answer to a surfaced question is itself ambiguous — re-ask before resuming.
-- During Phase 3, lint/tests fail in a way requiring judgement outside the plan.
-
-Never change the model, effort, sandbox mode, or navigator CLI to coerce a different verdict.
+**Never change the model, effort, sandbox mode, or navigator CLI to coerce a different verdict.**
 
 ## Review-only flow
 
-Use when the user already has changes and wants an adversarial review — no plan, no Claude implementation. The navigator adapter, verdict format, Step 6 classification, Cross-round issue tracking, and RESUME-SESSION loop all apply unchanged.
+Existing changes, no plan or Claude implementation. Adapter, verdict format, Step 6 classification, Cross-round tracking, and the RESUME loop apply unchanged.
 
-### R1: Setup
+**R1 — setup:** as Step 1 (slug, `.critique-loop/`, gitignore pathspec commit).
 
-Same as Step 1 — pick `<slug>` (slash-sanitized), create `.critique-loop/`, ensure it's gitignored (pathspec-scoped commit).
-
-### R2: Determine the diff range
-
-Ask the user what to review if not obvious. Default: the branch versus its merge base with the repo's default branch (don't assume `main`):
+**R2 — diff range.** Ask if not obvious. Default: branch vs merge-base with the repo's default branch (don't assume `main`):
 
 ```bash
 DEFAULT=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
 DEFAULT=${DEFAULT:-$(git branch -l main master --format='%(refname:short)' | head -1)}
 BASE=$(git merge-base HEAD "origin/$DEFAULT" 2>/dev/null || git merge-base HEAD "$DEFAULT")
-REVIEW_RANGE="${BASE}..HEAD"
-echo "${REVIEW_RANGE}" > .critique-loop/<slug>.review-range
+echo "${BASE}..HEAD" > .critique-loop/<slug>.review-range
 ```
 
-Other shapes: `HEAD` for uncommitted working-tree changes (navigator reads `git diff HEAD`); `<sha1>..<sha2>`; `<base>...HEAD`.
+Other shapes: `HEAD` (uncommitted work), `<sha1>..<sha2>`, `<base>...HEAD`.
 
-**Range integrity across rounds** — the recorded range must keep covering the work as fix commits land:
+**Range integrity across rounds** — the range must keep covering the work as fix commits land: `BASE` stays fixed and re-reviews diff `${BASE}..HEAD`; never re-record a range that excludes fixes (`<sha1>..<sha2>` becomes `<sha1>..HEAD` after the first fix round — if unrelated commits might land mid-loop, name the fix SHAs to the navigator instead). For the `HEAD` shape: untracked files are invisible to `git diff HEAD` — tell the navigator to also check `git status --porcelain` and read new files; once fixes are committed, switch to `<original-HEAD>..HEAD` plus the dirty tree, or the re-review sees an empty diff and false-approves.
 
-- The recorded `BASE` SHA is fixed; re-reviews always diff `${BASE}..HEAD` so later fix commits are included. Never re-record a range that would exclude them (`<sha1>..<sha2>` becomes `<sha1>..HEAD` after the first fix round — if unrelated commits might land on the branch mid-loop, name the fix SHAs to the navigator explicitly instead).
-- If reviewing uncommitted changes (`HEAD` shape): untracked files are invisible to `git diff HEAD` — tell the navigator to also check `git status --porcelain` and read new files; and once you commit fixes, switch the range to `<original-HEAD>..HEAD` plus the dirty tree, or the re-review sees an empty diff and false-approves.
-
-### R3: Navigator reviews the diff
-
-Run **START-SESSION** with `<OUTPUT_FILE>` = `.critique-loop/<slug>-code-review.md` and `<PROMPT>`:
+**R3 — START-SESSION**, `<OUTPUT_FILE>` = `.critique-loop/<slug>-code-review.md`:
 
 ```
-You are the navigator in a cross-model code review. The driver has changes they want reviewed adversarially before shipping.
+You are the navigator in a cross-model code review. The driver has changes to review adversarially before shipping.
 
-Run `git diff ${REVIEW_RANGE}` and read the changed files. Be adversarial — probe for:
-
-- bugs, regressions, missed edge cases
-- missing or inadequate tests
-- security, performance, or correctness issues
-- scope creep or leftover debug code
-- simpler alternatives the driver missed
+Run `git diff ${REVIEW_RANGE}` and read the changed files. Probe for: bugs, regressions, missed edge cases; missing/inadequate tests; security, performance, correctness issues; scope creep or leftover debug code; simpler alternatives.
 
 Output format: numbered asks with file:line refs, ending with `VERDICT: APPROVE | CHANGES_REQUESTED | BLOCK`.
 
 Do not write code. Do not modify files. Review only.
 ```
 
-### R4: Handle the verdict
+**R4 — verdict:** APPROVE → summarize rounds + surfaced decisions; done (push/PR is the user's call). CHANGES_REQUESTED → track/classify/fix/surface, append driver response, run checks, RESUME-SESSION (`-code-review-<N+1>.md`):
 
-- **`APPROVE`** → summarize rounds and surfaced decisions; done. Push / PR is the user's call.
-- **`CHANGES_REQUESTED`** → Cross-round issue tracking + Step 6 classification; fix code-level asks (conventional commits), surface product asks, append driver response, run project checks, then **RESUME-SESSION** with `<OUTPUT_FILE>` = `.critique-loop/<slug>-code-review-<N+1>.md`:
+```
+I addressed your code-review asks. New commits are on top of the range. Response notes: `.critique-loop/<slug>-driver-response.md`.
 
-  ```
-  I addressed your code-review asks. New commits are on top of the range. Response notes: `.critique-loop/<slug>-driver-response.md`.
+Re-review the full diff (`git diff ${REVIEW_RANGE}` — note HEAD has moved since your last review). Note which prior asks are resolved and which remain open. Same output format, end with `VERDICT:`.
+```
 
-  Re-review the full diff (`git diff ${REVIEW_RANGE}` — note HEAD has moved since your last review). Note which prior asks are resolved and which remain open. Same output format, end with `VERDICT:`.
-  ```
-
-  Loop back to R4 with the new review file.
-- **`BLOCK`** → summarize for the user, stop.
-
-All stopping rules apply. No user-approval gate — when the navigator approves, the skill terminates.
+Loop back to R4. BLOCK → summarize, stop. All stopping rules apply; no user-approval gate — navigator APPROVE terminates the skill.
