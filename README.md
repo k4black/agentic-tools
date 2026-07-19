@@ -47,17 +47,41 @@ install.sh         the idempotent bootstrap
 | `babysit-pr` | Drive a PR to merge-ready: fix CI, resolve bot review threads (gh-only) |
 | `critique-loop` | Cross-model adversarial review (Codex/Cursor navigator), plan + code flows |
 | `design-doc` | Research → grill → write `docs/design/yyyy-MM-dd-<slug>.md` feature design doc |
-| `domain-modeling` | Maintain a project's domain model / ubiquitous language / ADRs |
+| `domain-modeling` | Canonical AGENTS.md/CLAUDE.md format + maintain the project's Terminology (domain glossary) |
 | `grill-me` | Relentless interview to stress-test a plan until shared understanding |
 | `handoff` | Compact the current conversation into a handoff doc for the next session |
 | `improve-codebase-architecture` | Scan for module-deepening opportunities, visual HTML report, grill through picks |
-| `tdd` | Test-driven development: red-green-refactor with integration-first tests |
+| `test-driven-dev` | Test-driven development: red-green loop, pre-agreed seams, vertical slices |
 
 Skills follow the [Agent Skills spec](https://agentskills.io/specification) (`SKILL.md` + optional
 `scripts/`, `references/`, `agents/openai.yaml` for Codex metadata), validated in CI
 (`scripts/validate-skills.sh`).
 
+## Shared project conventions
+
+The skills and ralph presets interlock through a small set of per-project files — these are the
+agreements to check when editing any skill:
+
+| File (in the target project) | Owner / consumers |
+|---|---|
+| `docs/design/yyyy-MM-dd-<slug>.md` | Written by `design-doc` (skill or ralph preset); input to `implement`/`tdd` loops. **Decisions are locked** — implementers don't re-open them, changes go through the doc first. Also the home for standalone hard-to-reverse decisions (no separate ADR system). Monorepos: may live per sub-project (`<sub>/docs/design/`) |
+| `CLAUDE.md` / `AGENTS.md` | Agent instructions in the `domain-modeling` skill's canonical format, including the **Terminology** section (domain glossary — vocabulary source for `design-doc`, `test-driven-dev`, `improve-codebase-architecture`). Global layer comes from `GLOBAL-AGENTS.md` symlinks; read at session start, kept updated. Monorepos: one per sub-project, nearest wins |
+| `README.md`, `TODO.md` / `PROGRESS.md` | Orientation docs — read before exploring code, updated in place as part of any change (new service → README, progress → TODO/PROGRESS) |
+| `.critique-loop/`, `.ralph/` | Gitignored working state (sessions, reviews, specs, memories) — never committed, never part of a PR |
+| `CODEASSIST.md` | Per-repo steering read by ralph's `builtin:code-assist` Builder |
+
+Cross-skill agreements: skills are the single source of truth for method (ralph hats and other
+skills name-drop them, never copy); `grill-me` separates codebase **facts** (look up) from user
+**decisions** (ask, one question at a time, confirmation gate before acting); `test-driven-dev` seams are
+pre-agreed with the user — headless loops substitute an approved design doc; reviews are
+fail-closed with numbered concrete objections (`design-doc` review checklist, critique-loop
+verdicts, ralph critics).
+
+TODO: evaluate standalone `CONTEXT.md` files later, once the inline Terminology section
+outgrows AGENTS.md — reference format:
+[mattpocock/skills CONTEXT.md](https://github.com/mattpocock/skills/blob/main/CONTEXT.md).
+
 Credits: `babysit-pr` and `critique-loop` are adapted from
 [gzaripov/agent-skills](https://github.com/gzaripov/agent-skills) (MIT); `handoff`,
-`improve-codebase-architecture`, and `tdd` from
+`improve-codebase-architecture`, and `test-driven-dev` (upstream `tdd`) from
 [mattpocock/skills](https://github.com/mattpocock/skills) (MIT).
