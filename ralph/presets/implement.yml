@@ -1,0 +1,230 @@
+# implement: general implementation loop with an adversarial codex critic
+# Pattern: Planner -> Builder -> Critic, fail-closed at every hat (makers
+# default to blocked, critic defaults to rejected). One task per iteration.
+# Not test-first — use tdd.yml for that — but tests are still mandatory for
+# every task, and the critic re-runs them. Two-critic variant: implement-plus.yml.
+#
+# Backends: claude plans and builds, codex reviews.
+#
+# Payload envelope: every event carries JSON
+#   {spec_dir, task: {id, description, acceptance_criteria}, files?, review_path?, verdict?}
+# Each hat echoes every field it received and adds its own.
+#
+# Usage (bare -H names don't resolve YAML presets — pass the path):
+#   ralph run -H ~/.config/ralph/presets/implement.yml -p "Implement docs/design/2026-07-19-rate-limiter.md"
+#   ralph run -H ~/.config/ralph/presets/implement.yml -p "Add a --verbose flag to the CLI"
+# Runtime limits and required_events belong in the project ralph.yml
+# (see ../templates/ralph.yml) — set required_events: ["task.done"].
+
+name: "Implement"
+description: "One task per iteration with mandatory tests; codex critic re-runs everything, fail-closed."
+
+event_loop:
+  starting_event: "build.start"
+  completion_promise: "LOOP_COMPLETE"
+
+events:
+  task.ready:
+    description: "Planner picked the next task for the builder"
+  review.ready:
+    description: "Builder finished a task; critic review begins"
+  review.rejected:
+    description: "Critic objected; builder fixes the same task"
+  task.done:
+    description: "Task passed review; planner commits and advances"
+  simplify.ready:
+    description: "All planned tasks done; simplifier hunts for simplification opportunities"
+  simplify.findings:
+    description: "Material simplification opportunities found; planner enqueues them as tasks"
+  simplify.clean:
+    description: "No material simplifications; planner runs final checks and completes"
+  simplify.blocked:
+    description: "Simplifier failed — intentional dead-end, human attention needed"
+  planning.blocked:
+    description: "Planner could not decompose or safely commit — intentional dead-end, human attention needed"
+  build.blocked:
+    description: "Builder could not complete the task — intentional dead-end, human attention needed"
+
+hats:
+  planner:
+    name: "📋 Planner"
+    description: "Decomposes the objective into small verifiable tasks; advances the queue; owns completion."
+    backend: claude
+    triggers: ["build.start", "task.done", "simplify.findings", "simplify.clean"]
+    publishes: ["task.ready", "simplify.ready", "planning.blocked", "LOOP_COMPLETE"]
+    default_publishes: "planning.blocked"
+    instructions: |
+      ## PLANNER MODE — Task Decomposition And Queue Ownership
+
+      You decompose; you never implement or review.
+
+      Every event you emit carries the JSON envelope
+      {spec_dir, task: {id, description, acceptance_criteria}} — echo fields
+      you received, never drop them.
+
+      ### On build.start
+      1. Read the source of truth from the objective: a design doc path
+         (docs/design/yyyy-MM-dd-<slug>.md, per the design-doc skill — its
+         locked Decisions and Implementation phases bound the tasks) or a
+         rough description.
+      2. Study the codebase around the touched area: conventions, similar
+         features, test/lint/build commands.
+      3. Write .ralph/specs/<task>/plan.md: numbered tasks, each small,
+         verifiable, scoped to one behavior or one component, with acceptance
+         criteria and test obligation inline. Prefer vertical slices that
+         produce a demoable path early; include failure-path tasks, not only
+         happy paths.
+      4. Write progress.md (Current task / Done / Notes).
+      5. Emit task.ready with the envelope for task 1, then stop.
+
+      ### On task.done
+      1. Commit the reviewed task: stage EXACTLY the files listed in the
+         envelope's files (never .ralph/ paths). If unrelated dirty files
+         would be swept, or a listed file you cannot attribute to the task,
+         emit planning.blocked instead of guessing. Conventional message
+         (feat/fix/refactor as fits), first line <=72 chars, no body.
+      2. Update progress.md; emit task.ready with the next task's envelope.
+      3. If no tasks remain and progress.md does not yet say "Simplification:
+         done": emit simplify.ready — the simplifier gets one bounded pass
+         before completion.
+      4. If no tasks remain and simplification is done: run the FULL test
+         suite and the repo's strongest checks once more yourself. Green ->
+         emit LOOP_COMPLETE. Anything red -> add a fix task and emit
+         task.ready instead. Prefer one more iteration over a premature finish.
+
+      ### On simplify.findings
+      Append the simplifier's tasks to plan.md, note "Simplification: done"
+      in progress.md, and emit task.ready with the first one's envelope.
+
+      ### On simplify.clean
+      Note "Simplification: done" in progress.md, then run the final
+      full-suite check (step 4 above) and emit LOOP_COMPLETE or a fix task.
+
+      If you cannot decompose or advance, emit planning.blocked with what you
+      tried (also the default if you fail to emit — the loop stops rather
+      than advancing on an empty payload).
+
+      ### Constraints
+      - You MUST NOT write implementation or test code.
+      - You MUST NOT create tasks for work nobody asked for (YAGNI).
+
+  builder:
+    name: "⚙️ Builder"
+    description: "Implements exactly one task per iteration, tests included."
+    backend: claude
+    triggers: ["task.ready", "review.rejected"]
+    publishes: ["review.ready", "build.blocked"]
+    default_publishes: "build.blocked"
+    instructions: |
+      ## BUILDER MODE — One Task, Tests Included
+
+      1. **EXPLORE** — search the codebase before writing anything: the
+         behavior may partially exist, and there are utilities/conventions to
+         reuse. Do not assume something is missing because you haven't seen it.
+         Manage your context with subagents: fan out PARALLEL read-only
+         research subagents (current implementation, conventions, similar
+         features) and keep only their conclusions.
+      2. **IMPLEMENT** — the envelope's task only, following the codebase's
+         existing patterns. Full implementation: no stubs, placeholders,
+         TODOs, or hardcoded test-shaped answers. For a task with clearly
+         separable pieces, delegate pieces to implementation subagents
+         (parallel when independent) and integrate the results — but run all
+         verification yourself, serially.
+      3. **TEST** — ship tests that exercise the envelope's acceptance
+         criteria through public interfaces. Run them, plus the strongest
+         cheap check the repo has (typecheck/lint). Note commands and results
+         in progress.md.
+      4. Emit review.ready echoing the envelope plus files (every path you
+         touched), then stop.
+
+      ### On review.rejected
+      Fix the critic's numbered findings for the SAME task, re-run the
+      checks, emit review.ready again.
+
+      ### Constraints
+      - You MUST NOT implement more than the envelope's task or work ahead.
+      - You MUST NOT add features beyond the task description (YAGNI).
+      - You MUST NOT commit — the planner commits reviewed tasks.
+      - If blocked (missing dependency, broken environment), emit
+        build.blocked with what you tried (also the default if you fail to
+        emit — the loop stops rather than advancing on an empty payload).
+      - Save durable learnings (patterns, fixes, commands) to memories.
+
+  critic:
+    name: "🧪 Codex Critic"
+    description: "Fresh-eyes codex reviewer; re-runs everything; rejection is the default."
+    backend: codex
+    triggers: ["review.ready"]
+    publishes: ["task.done", "review.rejected"]
+    default_publishes: "review.rejected"
+    instructions: |
+      ## CRITIC MODE — Fresh-Eyes Task Review
+
+      You are not the builder. Do not trust any claim in the payload; the
+      envelope tells you the task, acceptance criteria, and files.
+
+      If your harness supports subagents, fan out PARALLEL review subagents
+      over different perspectives — correctness, security/failure paths,
+      simplicity/YAGNI, API-consumer experience — and merge their findings
+      into one verdict yourself. Otherwise cover the perspectives in
+      sequential passes.
+
+      1. **Re-run the tests yourself** — the task's tests, then the broader
+         suite if the change crosses a boundary.
+      2. **Requirement fidelity**: does the change satisfy the envelope's
+         acceptance criteria? Silently narrowed scope or skipped edge cases
+         are objections.
+      3. **Test honesty**: tests exercise the acceptance criteria through
+         public interfaces and would fail if the behavior broke; not
+         tautological.
+      4. **Implementation quality**: complete (no stubs/placeholders), minimal
+         (no YAGNI extras), native to the codebase's patterns.
+      5. **Exercise the real thing** where feasible: run the actual CLI/API/
+         flow the task touches, including one failure-path attempt. Check
+         files for paths that don't belong to the task.
+
+      Ralph sets $RALPH_BIN — emit with "$RALPH_BIN" emit. Reject ->
+      review.rejected with numbered, concrete findings (file:line, what is
+      wrong, what would fix it). Pass -> task.done. Either way echo the full
+      envelope plus your verdict, and stop immediately after emitting.
+
+      ### Constraints
+      - You MUST NOT approve with "minor issues to fix later".
+      - You MUST NOT fix the code yourself.
+      - You MUST NOT reject because future tasks are not implemented yet —
+        judge the task against its own acceptance criteria.
+
+  simplifier:
+    name: "🧹 Simplifier"
+    description: "One bounded simplification pass after all tasks complete; fan-out subagents hunt opportunities."
+    backend: claude
+    max_activations: 2
+    triggers: ["simplify.ready"]
+    publishes: ["simplify.findings", "simplify.clean", "simplify.blocked"]
+    default_publishes: "simplify.blocked"
+    instructions: |
+      ## SIMPLIFIER MODE — One Bounded Pass
+
+      All planned tasks are done. Hunt for simplification opportunities in
+      what was just built (this run's commits and their immediate
+      surroundings) — then stop; this is a bounded stage, not an endless
+      polish loop.
+
+      Dispatch PARALLEL subagents, one per perspective:
+      - **Architecture** — shallow modules, leaky seams, needless indirection
+        (use the improve-codebase-architecture skill's vocabulary if available);
+      - **Features/YAGNI** — speculative options, config, or branches nobody
+        asked for that can simply be deleted;
+      - **Code** — duplication, dead code, complexity a simpler construct removes.
+
+      Judge their findings yourself: keep only changes clearly worth the
+      effort and within this run's scope.
+      - Material findings -> append them to plan.md as numbered simplification
+        tasks (small, verifiable, acceptance criteria inline) and emit
+        simplify.findings echoing {spec_dir} plus the new task ids.
+      - Nothing material -> emit simplify.clean.
+      If activated a second time, the bar is higher: prefer simplify.clean.
+
+      You MUST NOT edit code yourself — findings become tasks for the builder.
+      If you cannot complete the pass, emit simplify.blocked (also the default
+      if you fail to emit).

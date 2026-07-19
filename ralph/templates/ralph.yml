@@ -1,0 +1,36 @@
+# Project overlay for ralph-orchestrator — copy to the project root as ralph.yml
+# and fill the [placeholders]. Backend (claude) and memories come from
+# ~/.ralph/config.yml (agentic-tools); put here only what is project-specific.
+
+event_loop:
+  max_iterations: 50
+  # Fail-closed completion gate: the promise only counts after these events
+  # fire. (Must live here — a -H hats file only contributes starting_event /
+  # completion_promise / cancellation_promise.) The placeholder below can
+  # never fire, so the loop cannot complete until you REPLACE it with the
+  # line for the preset you run:
+  required_events: ["REPLACE-ME.per-preset"]
+  # required_events: ["design.approved"]   # design-doc
+  # required_events: ["slice.done"]        # tdd / tdd-plus
+  # required_events: ["task.done"]         # implement / implement-plus
+  # required_events: ["review.passed"]     # builtin:code-assist
+
+# Backpressure gates: commands that must pass each iteration; on_fail is fed
+# back into the loop. The faster these run, the more useful iterations you get.
+backpressure:
+  gates:
+    - name: test
+      command: "[test command]"
+      on_fail: "Tests failed. Fix failing tests before proceeding."
+    - name: lint
+      command: "[lint command]"
+      on_fail: "Lint failed. Fix before proceeding."
+
+core:
+  specs_dir: ".ralph/specs/"
+  # Project guardrails are injected into EVERY iteration — including runs with
+  # builtin collections (-H builtin:code-assist), which is the supported way to
+  # steer builtins (hat instructions themselves cannot be extended).
+  # guardrails:
+  #   - "Use [dev server command] for manual verification"
+  #   - "Never touch [fragile area] without adding a regression test"

@@ -1,0 +1,141 @@
+# design-doc: planning workflow — design doc + two independent reviewers
+# Pattern: Critic-Actor chain, fail-closed at every hat (makers default to
+# blocked, critics default to rejected).
+#
+# Produces a reviewed design doc at docs/design/yyyy-MM-dd-<slug>.md.
+# The METHOD (research rules, document template, headless-mode policy, review
+# checklist) lives in the `design-doc` skill — the single source of truth;
+# hats only wire it into ralph's event loop. No implementation code, no commits.
+#
+# Backends: claude writes, codex reviews first, opencode (GLM) reviews second.
+#
+# Payload envelope: every event carries JSON
+#   {doc_path, spec_dir, round, review_path?, verdict?}
+# Each hat echoes every field it received and adds its own; round increments
+# only when the architect revises.
+#
+# Usage (bare -H names don't resolve YAML presets — pass the path):
+#   ralph run -H ~/.config/ralph/presets/design-doc.yml -p "Design a rate limiter for the public API"
+# Runtime limits and required_events belong in the project ralph.yml
+# (see ../templates/ralph.yml) — set required_events: ["design.approved"].
+
+name: "Design Doc"
+description: "Architect drafts a design doc per the design-doc skill; codex and GLM critics review in sequence, fail-closed."
+
+event_loop:
+  starting_event: "design.start"
+  completion_promise: "DESIGN_COMPLETE"
+
+events:
+  design.ready:
+    description: "Doc drafted or revised; first (codex) review begins"
+  design.second:
+    description: "First reviewer passed; second (GLM) reviewer takes over"
+  design.approved:
+    description: "Both reviewers passed; architect finalizes"
+  design.rejected:
+    description: "A reviewer objected; architect must address every numbered objection"
+  design.blocked:
+    description: "Architect could not produce/revise the doc — intentional dead-end, human attention needed"
+
+hats:
+  architect:
+    name: "📐 Architect"
+    description: "Writes and revises the design doc per the design-doc skill; finalizes once both reviewers approve."
+    backend: claude
+    triggers: ["design.start", "design.rejected", "design.approved"]
+    publishes: ["design.ready", "design.blocked", "DESIGN_COMPLETE"]
+    default_publishes: "design.blocked"
+    instructions: |
+      ## ARCHITECT MODE
+
+      Follow the `design-doc` skill (installed in this harness — read its
+      SKILL.md) for HOW to research and write the doc, including its
+      "Headless mode" section: this loop has no user to grill. This hat only
+      adds loop mechanics. You never write implementation code.
+
+      Every event you emit carries the JSON envelope
+      {doc_path, spec_dir, round} — echo fields you received, never drop them.
+
+      ### On design.start
+      Research and write the full doc per the skill, Status: draft, at
+      docs/design/yyyy-MM-dd-<slug>.md. Use .ralph/specs/<slug>/ as spec_dir.
+      Emit design.ready with {doc_path, spec_dir, round: 1}, then stop.
+
+      ### On design.rejected
+      Read the review at the envelope's review_path. Address EVERY numbered
+      objection: revise the doc, or record your counter-reasoning under
+      Decisions — never silently ignore one. Note per-objection resolutions in
+      {spec_dir}/responses.md. Emit design.ready with round incremented, then
+      stop. The doc is the medium — do not argue in event payloads.
+
+      ### On design.approved
+      Set Status: reviewed and emit DESIGN_COMPLETE. Do NOT commit —
+      committing the doc is the human's call after reading it.
+
+      If you cannot produce or revise the doc, emit design.blocked with what
+      you tried (this is also the default if you fail to emit — the loop
+      stops rather than advancing on an empty payload).
+
+      Save durable codebase learnings to memories for later iterations.
+
+  critic-codex:
+    name: "🔎 Codex Critic"
+    description: "First fresh-eyes adversarial reviewer; rejection is the default."
+    backend: codex
+    triggers: ["design.ready"]
+    publishes: ["design.second", "design.rejected"]
+    default_publishes: "design.rejected"
+    instructions: |
+      ## DESIGN CRITIC MODE — first gate
+
+      You did not write this doc. Review the doc at the envelope's doc_path
+      against the `design-doc` skill's "Reviewing a design doc" checklist and
+      its template (read the skill's SKILL.md) — verify claims against the
+      actual code, objections numbered and concrete.
+
+      Write your review to {spec_dir}/reviews/round-{round}-codex.md:
+
+          VERDICT: APPROVE | CHANGES_REQUESTED
+          1. <numbered objection — section, what's wrong, what would fix it>
+
+      Ralph sets $RALPH_BIN — emit with "$RALPH_BIN" emit. On APPROVE emit
+      design.second, on CHANGES_REQUESTED emit design.rejected. Either way the
+      payload echoes the full envelope you received plus your review_path and
+      verdict. Stop immediately after emitting.
+
+      You MUST NOT modify the doc or any file outside .ralph/.
+
+  critic-glm:
+    name: "🧿 GLM Critic"
+    description: "Second, independent reviewer (different model family); rejection is the default."
+    backend: opencode
+    # --auto: auto-approve permissions — required because ralph spills large
+    # prompts to a temp file outside the workspace that opencode must read.
+    # The critic is read-only by instruction; sandbox the loop for real autonomy.
+    backend_args: ["--auto", "--model", "openrouter/z-ai/glm-5.2"]
+    triggers: ["design.second"]
+    publishes: ["design.approved", "design.rejected"]
+    default_publishes: "design.rejected"
+    instructions: |
+      ## DESIGN CRITIC MODE — second gate
+
+      A first reviewer already passed this doc — do NOT rubber-stamp their
+      verdict; your value is an independent read from a different model
+      family. Review the doc at the envelope's doc_path against the
+      `design-doc` skill's "Reviewing a design doc" checklist (read the
+      skill's SKILL.md), verifying claims against the actual code. Pay special
+      attention to objections the architect claims to have resolved
+      ({spec_dir}/responses.md).
+
+      Write your review to {spec_dir}/reviews/round-{round}-glm.md:
+
+          VERDICT: APPROVE | CHANGES_REQUESTED
+          1. <numbered objection>
+
+      Ralph sets $RALPH_BIN — emit with "$RALPH_BIN" emit. On APPROVE emit
+      design.approved, on CHANGES_REQUESTED emit design.rejected. Either way
+      the payload echoes the full envelope plus your review_path and verdict.
+      Stop immediately after emitting.
+
+      You MUST NOT modify the doc or any file outside .ralph/.

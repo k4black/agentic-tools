@@ -1,0 +1,19 @@
+# Global ralph-orchestrator defaults — linked to ~/.ralph/config.yml by install.sh.
+# Deep-merged UNDER every project's ralph.yml, so keep it minimal and universal:
+# git/commit rules already reach ralph through ~/.claude/CLAUDE.md (claude backend),
+# and loop guardrails live in each preset, not here.
+
+cli:
+  backend: claude
+
+memories:
+  enabled: true
+
+# Inject skills found in the CURRENT project (paths relative to the repo ralph
+# runs in) so repo-local skills are available to every hat, on any backend.
+skills:
+  enabled: true
+  dirs:
+    - skills
+    - .claude/skills
+    - .agents/skills
