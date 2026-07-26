@@ -20,7 +20,7 @@ Re-run it any time: after `git pull`, after adding a skill, after installing a n
 | OpenCode | reads `~/.claude/skills` + `~/.agents/skills` natively | `~/.config/opencode/AGENTS.md` → `GLOBAL-AGENTS.md` |
 | ralph-orchestrator | `~/.config/ralph/presets` → `ralph/presets/` | `~/.ralph/config.yml` → `ralph/config.yml` |
 
-Tool configuration is never hand-edited: the RTK hook is installed by `rtk init`, Claude Code
+Tool configuration is never manually-edited: the RTK hook is installed by `rtk init`, Claude Code
 marketplaces/plugins through the `claude plugin` CLI, and MCP servers (Dart/Flutter, ralph)
 through `claude mcp add` / `codex mcp add` — so a fresh machine gets the full setup in one run.
 ralph-orchestrator (≥ 2.10) additionally gets a global config with repo-local skill injection
@@ -77,10 +77,8 @@ agreements to check when editing any skill:
 | `docs/design/yyyy-MM-dd-<slug>.md` | Written by `design-doc` (skill or ralph preset); input to `implement`/`tdd` loops. **Decisions are locked** — implementers don't re-open them, changes go through the doc first. Also the home for standalone hard-to-reverse decisions (no separate ADR system). Monorepos: may live per sub-project (`<sub>/docs/design/`) |
 | `CLAUDE.md` / `AGENTS.md` | Agent instructions in the `improve-agents-md` skill's canonical structure (CLAUDE.md is a symlink), including the **Terminology** section (glossary, maintained by `domain-modeling` — vocabulary source for `design-doc`, `test-driven-dev`, `improve-codebase-architecture`). Global layer comes from `GLOBAL-AGENTS.md` symlinks; read at session start, kept updated. Monorepos: nested files stack additively (nearest wins) but only for areas that earn one — see the skill's two gates |
 | `README.md`, `TODO.md` / `PROGRESS.md` | Orientation docs — read before exploring code, updated in place as part of any change (new service → README, progress → TODO/PROGRESS) |
-| `.critique-loop/`, `.ralph/` | Gitignored working state (sessions, reviews, specs, memories) — never committed, never part of a PR |
-| `CODEASSIST.md` | Per-repo steering read by ralph's `builtin:code-assist` Builder |
 
-Cross-skill agreements: skills are the single source of truth for method (ralph hats and other
+Cross-skill agreements: skills are the single source of truth for method (orkestration tools and other
 skills name-drop them, never copy); `grill-me` separates codebase **facts** (look up) from user
 **decisions** (ask, one question at a time, confirmation gate before acting); `test-driven-dev` seams are
 pre-agreed with the user — headless loops substitute an approved design doc; reviews are
