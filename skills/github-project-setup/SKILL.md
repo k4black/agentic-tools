@@ -23,6 +23,7 @@ protects against accident, not intent; never report it as security.
 | Features | Discussions on, Wiki off | `has_discussions`, `has_wiki` |
 | Default branch | require a PR, dismiss stale reviews, require conversation resolution, linear history, no force-push, no deletion, squash-only merge | one ruleset (`assets/ruleset.json`) |
 | Default branch | admin bypass, `always` | `bypass_actors: RepositoryRole 5` |
+| Security | Dependabot alerts, security updates, private vulnerability reporting, secret scanning, push protection | see Security & analysis below |
 | Files | weekly Dependabot; advisory PR-title lint | `.github/dependabot.yml`, `.github/workflows/pr-title.yml` |
 
 Deliberately out of scope: **required status checks** (wiring check contexts is
@@ -39,6 +40,12 @@ gh api "repos/$R/rulesets" --jq '.[] | {id, name, enforcement}'   # rules NOT in
 gh api "repos/$R/rulesets/<id>" --jq '{conditions, rules, bypass_actors}'   # one GET per id
 gh api "repos/$R/contents/.github/dependabot.yml" --silent 2>/dev/null && echo "dependabot: present"
 ls .github/workflows/ 2>/dev/null   # any PR-title linter already here?
+
+# security: no single endpoint, and the alerts read is status-only (204 on / 404 off)
+gh api "repos/$R" --jq '.security_and_analysis'
+gh api "repos/$R/vulnerability-alerts" -i 2>/dev/null | head -1
+gh api "repos/$R/automated-security-fixes" --jq '{enabled, paused}' 2>/dev/null || echo unavailable
+gh api "repos/$R/private-vulnerability-reporting" --jq .enabled
 ```
 
 Do **not** use `gh repo view --json` for the diff — it lacks `autoMergeAllowed` and
@@ -122,6 +129,50 @@ and liable to change, so confirm rather than assume it every time. If
 `bypass_actors` comes back empty, the id is wrong — stop and report it rather than
 activating a ruleset that locks the owner out. `PUT` is a full replace, not a merge.
 
+### Security & analysis
+
+Of the toggles on that settings page, **five are automatable and four are not**.
+Apply only what the read showed as off:
+
+```bash
+gh api -X PUT "repos/$R/vulnerability-alerts"            # Dependabot alerts (DELETE to disable)
+gh api -X PUT "repos/$R/automated-security-fixes"        # Dependabot security updates
+gh api -X PUT "repos/$R/private-vulnerability-reporting" # public repos only
+gh api -X PATCH "repos/$R" \
+  -f 'security_and_analysis[secret_scanning][status]=enabled' \
+  -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled'
+```
+
+Send both secret-scanning fields in **one** PATCH — push protection requires secret
+scanning already on (`gh repo edit` refuses the combination client-side).
+
+| Toggle | Verdict |
+|---|---|
+| Dependabot alerts / security updates / private vulnerability reporting | automatable (PVR: public repos only) |
+| Secret scanning, push protection | automatable; free on public repos, **paid** on org-owned private, unavailable on user-owned private |
+| Dependency graph | **permanently on** for public repos — no API, nothing to do |
+| Automatic dependency submission | **UI only**, and Maven-only; needs dependency graph + Actions enabled |
+| Dependabot malware alerts | **UI only**; enable Dependabot alerts first |
+| Grouped security updates | **UI only** as a repo toggle — but `dependabot.yml` `groups:` + `applies-to: security-updates` is finer *and* automatable, and takes precedence where it applies |
+| Generic patterns (API: `non_provider_patterns`), validity checks, AI detection, all `delegated_*` | need an **org** on Team+ with Secret Protection — skip on personal repos |
+
+Report the four UI-only ones as manual follow-ups with their settings path; never
+silently skip them.
+
+**Absent ≠ disabled, and present ≠ available.** Keys the plan doesn't offer are
+usually *missing* from `security_and_analysis` rather than `{"status":"disabled"}`,
+so treating missing as off proposes writes that fail. But the inference only runs
+one way: on a free personal repo `secret_scanning_non_provider_patterns` and
+`secret_scanning_validity_checks` are *present and `disabled`* while still being
+unavailable (both need org + Secret Protection). Gate on plan and owner type, not
+on key presence.
+
+If validity checks *are* available (org + Secret Protection), ask before enabling:
+it **periodically sends the detected secret to its issuing service** to test whether
+it's live, and for some secret types sends adjacent context (host/URL) too. On a
+public repo the secret is already exposed, so it's near-pure upside; on a private
+repo it's a deliberate egress of a still-confidential credential.
+
 ### Files (only if absent — never edit an existing one)
 
 Copy `assets/dependabot.example.yml` → `.github/dependabot.yml`, keeping only the
@@ -161,6 +212,9 @@ Close by re-reading `repos/$R` and the ruleset to confirm the applied state.
 [Repo settings REST](https://docs.github.com/en/rest/repos/repos#update-a-repository) ·
 [gh repo edit](https://cli.github.com/manual/gh_repo_edit) ·
 [Merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue) ·
-[Dependabot options](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference)
+[Dependabot options](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference) ·
+[Security & analysis settings](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-security-and-analysis-settings-for-your-repository) ·
+[Security updates & grouping](https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/configure-security-updates) ·
+[Validity checks](https://docs.github.com/en/code-security/concepts/secret-security/validity-checks)
 
 [rest-api-description#4406]: https://github.com/github/rest-api-description/issues/4406
