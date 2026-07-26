@@ -143,6 +143,10 @@ Close by re-reading `repos/$R` and the ruleset to confirm the applied state.
 - All five `pull_request` parameters are schema-required; a partial object 422s.
 - Bypass is **per-ruleset, not per-rule** — the admin bypass here also covers
   force-push and deletion. Split into two rulesets if that matters.
+- A bypassed push is not silent: git prints `remote: Bypassed rule violations for
+  refs/heads/main` and lists the rule it stepped over. Treat that line as the
+  guardrail working, not as a warning to suppress. (`bypass_mode: exempt` would
+  suppress the audit entry — which is why this ruleset uses `always`.)
 - `OrganizationAdmin` is hard-rejected on personal repos, and actors are validated
   at create time even with `enforcement: disabled`.
 - `bypass_actors` is only returned to callers with write access to the ruleset.
