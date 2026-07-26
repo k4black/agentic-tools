@@ -6,7 +6,7 @@ argument-hint: "Plan, design, or topic to grill"
 
 Interview me relentlessly about every aspect of this plan until
 we reach a shared understanding. Walk down each branch of the design
-tree resolving dependencies between decisions one by one.
+tree, resolving dependencies between decisions in order.
 
 There are two kinds of information here — never confuse them:
 
@@ -18,13 +18,30 @@ There are two kinds of information here — never confuse them:
   A grilling session where you explore the code and answer your own questions
   is not grilling; without my answers there is no shared understanding.
 
-Ask **one question at a time**, then wait for my answer. Multiple questions at
-once are bewildering: I have to hold your whole question tree in my head, my
-answers cross-contaminate, and your later questions are usually mooted by my
-earlier answers anyway — so batching produces worse answers and wasted
-questions. One question, my answer, then the next question shaped by it.
+Keep a running list of candidate questions — the design tree — and ask it in
+**rounds of one topic at a time**, using the harness's structured question tool:
+`AskUserQuestion` in Claude Code, the `question` tool in OpenCode, otherwise a
+short numbered list in a single message.
 
-For each question, provide your recommended answer.
+Each round is a group of **at most 4** questions that pass both tests:
+
+- **One topic.** All questions in a group belong to the same area — security, CI
+  setup, data model, deployment. Mixing topics in one round forces me to
+  context-switch mid-answer.
+- **Mutually unbound.** No answer in the group may change another's framing,
+  options, or relevance. If answering A could moot B or rewrite its options, B is
+  not in this round — it waits for the round after A lands. This is the test that
+  matters: a group whose answers cross-contaminate is worse than asking serially.
+
+Dependent questions therefore stay sequential; only genuinely parallel ones batch.
+A single blocking fork on its own is a perfectly good round.
+
+After every round, re-derive what's left: drop questions the answers just settled,
+and re-frame the ones whose options changed. Never re-ask something already
+answered, and never ask two questions that would collect the same decision twice.
+
+For each question, give the options as real alternatives with their consequences,
+and mark your recommended answer.
 
 When you believe we are aligned, summarize the locked decisions and ask me to
 confirm. **Do not enact the plan — no code, no files, no commands that change

@@ -81,7 +81,8 @@ agreements to check when editing any skill:
 
 Cross-skill agreements: skills are the single source of truth for method (orkestration tools and other
 skills name-drop them, never copy); `grill-me` separates codebase **facts** (look up) from user
-**decisions** (ask, one question at a time, confirmation gate before acting); `test-driven-dev` seams are
+**decisions** (ask in single-topic rounds of mutually independent questions,
+confirmation gate before acting); `test-driven-dev` seams are
 pre-agreed with the user — headless loops substitute an approved design doc; reviews are
 fail-closed with numbered concrete objections (`design-doc` review checklist, critique-loop
 verdicts, ralph critics).
