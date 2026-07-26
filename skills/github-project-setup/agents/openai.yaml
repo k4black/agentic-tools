@@ -1,0 +1,5 @@
+interface:
+  display_name: "GitHub Project Setup"
+  short_description: "Harden a GitHub repo: squash-only, ruleset, Dependabot"
+policy:
+  allow_implicit_invocation: false

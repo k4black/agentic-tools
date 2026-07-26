@@ -1,0 +1,88 @@
+# EXAMPLE, not a drop-in. `package-ecosystem` and `directory` must match what the
+# repo actually has — a declared ecosystem with no manifest makes every Dependabot
+# run fail. Keep only the blocks that apply, then delete the rest.
+#
+# The pattern in every block: minor + patch grouped into one weekly PR, majors left
+# to Dependabot's default one-PR-per-dependency path. No second group, no `ignore`
+# rule — a dependency whose available bump is `major` simply falls outside the group.
+# https://docs.github.com/en/code-security/tutorials/secure-your-dependencies/optimizing-pr-creation-version-updates
+
+version: 2
+
+updates:
+  # Workflows — always resolve from the repo root, whatever the project layout.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "github-actions"]
+    commit-message:
+      prefix: "ci"
+      include: "scope" # -> "ci(deps): bump actions/checkout from 4 to 5"
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns: ["*"]
+
+  # Python (pip / uv / poetry all use "pip"; "uv" exists separately for uv.lock).
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "python"]
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope" # -> "chore(deps):" / "chore(deps-dev):"
+    groups:
+      python-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Node. Change `directory` per workspace, or use `directories: ["/apps/*"]`.
+  # - package-ecosystem: "npm"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #     day: "monday"
+  #   labels: ["dependencies", "javascript"]
+  #   commit-message:
+  #     prefix: "chore"
+  #     include: "scope"
+  #   groups:
+  #     npm-minor-patch:
+  #       applies-to: version-updates
+  #       patterns: ["*"]
+  #       update-types: ["minor", "patch"]
+
+  # Rust — one block per workspace root that owns a Cargo.lock.
+  # - package-ecosystem: "cargo"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #     day: "monday"
+  #   groups:
+  #     cargo-minor-patch:
+  #       applies-to: version-updates
+  #       patterns: ["*"]
+  #       update-types: ["minor", "patch"]
+
+  # Dart/Flutter: "pub". Containers: "docker" (one block per Dockerfile directory).
+  # Full ecosystem list and every option:
+  # https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+#
+# Enum trap: groups[].update-types takes ["major","minor","patch"]; ignore[].update-types
+# takes ["version-update:semver-major", ...]. Different enums — mixing them is a config error.
+#
+# `open-pull-requests-limit` defaults to 5. `labels:` REPLACES the default
+# ["dependencies"] rather than adding to it. `include: "scope"` accepts no other value,
+# and the scope word (deps / deps-dev) is not customizable.
+#
+# Known bug: pattern-matched dependencies can be marked handled regardless of
+# `update-types`, suppressing the individual major PRs (reproduced on Maven).
+# If majors must never be missed, verify per-ecosystem or add an explicit second
+# group with update-types: ["major"].
+# https://github.com/dependabot/dependabot-core/issues/14202

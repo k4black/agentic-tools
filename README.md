@@ -57,6 +57,7 @@ install.sh         the idempotent bootstrap
 | `critique-loop` | Cross-model adversarial review (Codex/Cursor navigator), plan + code flows |
 | `design-doc` | Research → grill → write `docs/design/yyyy-MM-dd-<slug>.md` feature design doc |
 | `domain-modeling` | Maintain the project's Terminology section (domain glossary) in AGENTS.md |
+| `github-project-setup` | Harden a GitHub repo to one target state: squash-only merges, protected default branch (ruleset), Dependabot, PR-title lint (user-triggered) |
 | `grill-me` | Relentless interview to stress-test a plan until shared understanding |
 | `handoff` | Compact the current conversation into a handoff doc for the next session |
 | `improve-agents-md` | Create/audit/compress a project's AGENTS.md/CLAUDE.md against the canonical structure, decide which areas earn nested files (user-triggered) |

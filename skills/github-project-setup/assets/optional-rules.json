@@ -1,0 +1,23 @@
+{
+  "merge_queue": {
+    "type": "merge_queue",
+    "parameters": {
+      "merge_method": "SQUASH",
+      "grouping_strategy": "ALLGREEN",
+      "check_response_timeout_minutes": 60,
+      "max_entries_to_build": 5,
+      "max_entries_to_merge": 5,
+      "min_entries_to_merge": 1,
+      "min_entries_to_merge_wait_minutes": 5
+    }
+  },
+  "commit_message_pattern": {
+    "type": "commit_message_pattern",
+    "parameters": {
+      "name": "Conventional Commits",
+      "operator": "regex",
+      "pattern": "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\\([\\w\\-\\.]+\\))?(!)?: ([\\w ])+([\\s\\S]*)",
+      "negate": false
+    }
+  }
+}
