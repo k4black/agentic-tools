@@ -1,0 +1,5 @@
+interface:
+  display_name: "AGENTS.md/CLAUDE.md Maintenance"
+  short_description: "Create, audit, compress, and split project agent docs"
+policy:
+  allow_implicit_invocation: false

@@ -219,3 +219,6 @@ __marimo__/
 
 # ralph-orchestrator working files
 .ralph/
+
+# macOS
+.DS_Store

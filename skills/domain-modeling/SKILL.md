@@ -10,8 +10,8 @@ project's AGENTS.md/CLAUDE.md — challenging terms, inventing edge-case
 scenarios, writing the glossary down the moment it crystallises. (Merely
 *reading* Terminology for vocabulary is not this skill; use it when changing
 the model. The agent-docs file itself — structure, creation, cleanup — is the
-`agents-md` skill's job; in monorepos the glossary lives in the *nearest*
-AGENTS.md.)
+`improve-agents-md` skill's job; in monorepos the glossary lives in the
+*nearest* AGENTS.md.)
 
 ## Terminology section format
 
