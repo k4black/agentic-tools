@@ -85,6 +85,7 @@ install.sh         the idempotent bootstrap
 | `handoff` | Compact the current conversation into a handoff doc for the next session |
 | `improve-agents-md` | Create/audit/compress a project's AGENTS.md/CLAUDE.md against the canonical structure, decide which areas earn nested files (user-triggered) |
 | `improve-codebase-architecture` | Scan for module-deepening opportunities, visual HTML report, grill through picks |
+| `ponytail` | Lazy senior dev mode — YAGNI ladder, stdlib/native before custom code, shortest diff; `review` (diff) and `audit` (repo) sub-flows (user-triggered) |
 | `test-driven-dev` | Test-driven development: red-green loop, pre-agreed seams, vertical slices |
 
 Skills follow the [Agent Skills spec](https://agentskills.io/specification) (`SKILL.md` + optional
@@ -117,4 +118,8 @@ outgrows AGENTS.md — reference format:
 Credits: `babysit-pr` and `critique-loop` are adapted from
 [gzaripov/agent-skills](https://github.com/gzaripov/agent-skills) (MIT); `handoff`,
 `improve-codebase-architecture`, and `test-driven-dev` (upstream `tdd`) from
-[mattpocock/skills](https://github.com/mattpocock/skills) (MIT).
+[mattpocock/skills](https://github.com/mattpocock/skills) (MIT); `ponytail` from
+[DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.8.4 (MIT) — the
+`ponytail`, `ponytail-review` and `ponytail-audit` skills collapsed into one user-triggered
+skill with a single intensity (upstream's `lite`/`ultra` levels, hooks, MCP server and
+`gain`/`debt`/`help` skills are deliberately not ported).
