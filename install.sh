@@ -6,7 +6,6 @@
 #   skills/*            -> symlinked into ~/.claude/skills, ~/.agents/skills, ~/.codex/skills
 #                          (OpenCode reads ~/.claude/skills + ~/.agents/skills natively)
 #   GLOBAL-AGENTS.md    -> ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, ~/.config/opencode/AGENTS.md
-#   rtk hook            -> installed by rtk's own installer (rtk init)
 #   Claude plugins/MCP  -> installed via the claude/codex CLIs (never hand-edited configs)
 #   ralph/              -> ~/.ralph/config.yml + ~/.config/ralph/presets (ralph-orchestrator)
 #   permissions/        -> claude settings.json allow-rules merge + ~/.codex/rules/ symlink
@@ -70,16 +69,7 @@ link "$REPO/GLOBAL-AGENTS.md" "$HOME/.claude/CLAUDE.md"
 link "$REPO/GLOBAL-AGENTS.md" "$HOME/.codex/AGENTS.md"
 link "$REPO/GLOBAL-AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
 
-# --- 3. rtk hook (rtk's own installer; no hand-edited configs) ---------------
-
-if command -v rtk >/dev/null 2>&1; then
-  echo "rtk hook (rtk init)"
-  rtk init -g --hook-only --auto-patch
-else
-  echo "rtk not installed — skipping hook setup (install rtk, then re-run)"
-fi
-
-# --- 4. Claude Code marketplaces + plugins (via claude CLI, never hand-edits) -
+# --- 3. Claude Code marketplaces + plugins (via claude CLI, never hand-edits) -
 
 if command -v claude >/dev/null 2>&1; then
   echo "claude marketplaces"
@@ -143,7 +133,7 @@ else
   echo "claude CLI not installed — skipping plugin setup (install claude, then re-run)"
 fi
 
-# --- 5. MCP servers (via each CLI, never hand-edits) --------------------------
+# --- 4. MCP servers (via each CLI, never hand-edits) --------------------------
 
 # Dart/Flutter MCP server (https://docs.flutter.dev/ai/mcp-server), needs Dart >= 3.9
 if command -v dart >/dev/null 2>&1; then
@@ -178,7 +168,7 @@ if ralph_supported && command -v claude >/dev/null 2>&1; then
   fi
 fi
 
-# --- 6. ralph-orchestrator: global config + shared presets --------------------
+# --- 5. ralph-orchestrator: global config + shared presets --------------------
 
 if ralph_supported; then
   echo "ralph global config + presets"
@@ -189,7 +179,7 @@ else
   echo "ralph missing or < 2.10 — skipping (npm i -g @ralph-orchestrator/ralph-cli, then re-run)"
 fi
 
-# --- 7. permission allowlists: read-only commands (rtk + plain variants) ------
+# --- 6. permission allowlists: read-only commands -----------------------------
 
 # Claude Code: merge permissions/claude-allow.json into ~/.claude/settings.json
 # (permissions merge additively across scopes; no CLI exists for rules, and the
@@ -224,8 +214,8 @@ if command -v codex >/dev/null 2>&1; then
   echo "codex execpolicy rules"
   mkdir -p "$HOME/.codex/rules"
   link "$REPO/permissions/codex.rules" "$HOME/.codex/rules/agentic-tools.rules"
-  if codex execpolicy check --rules "$REPO/permissions/codex.rules" -- rtk git status >/dev/null 2>&1; then
-    echo "  execpolicy validated (rtk git status -> allow)"
+  if codex execpolicy check --rules "$REPO/permissions/codex.rules" -- gh pr view 1 >/dev/null 2>&1; then
+    echo "  execpolicy validated (gh pr view -> allow)"
   else
     echo "  warning: codex execpolicy check failed or unsupported — verify manually"
   fi

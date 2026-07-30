@@ -20,26 +20,39 @@ Re-run it any time: after `git pull`, after adding a skill, after installing a n
 | OpenCode | reads `~/.claude/skills` + `~/.agents/skills` natively | `~/.config/opencode/AGENTS.md` → `GLOBAL-AGENTS.md` |
 | ralph-orchestrator | `~/.config/ralph/presets` → `ralph/presets/` | `~/.ralph/config.yml` → `ralph/config.yml` |
 
-Tool configuration is never manually-edited: the RTK hook is installed by `rtk init`, Claude Code
-marketplaces/plugins through the `claude plugin` CLI, and MCP servers (Dart/Flutter, ralph)
-through `claude mcp add` / `codex mcp add` — so a fresh machine gets the full setup in one run.
+Tool configuration is never manually-edited: Claude Code marketplaces/plugins go through the
+`claude plugin` CLI, and MCP servers (Dart/Flutter, ralph) through `claude mcp add` /
+`codex mcp add` — so a fresh machine gets the full setup in one run.
 ralph-orchestrator (≥ 2.10) additionally gets a global config with repo-local skill injection
 and five custom hat-collection presets (see `ralph/README.md`).
 
-Read-only commands (`ls`, `grep`, `find`, `git log/diff/…`, `gh pr view/…` and their `rtk`
-variants) are pre-approved in every repo: `permissions/claude-allow.json` is merged into
-user-level `~/.claude/settings.json` (rules merge additively across scopes; project denies
-still win), and `permissions/codex.rules` is an execpolicy file symlinked into
-`~/.codex/rules/` (additive — codex's own "always allow" amendments stay in `default.rules`).
-Deliberately excluded: `rtk proxy` (arbitrary passthrough), test runners, `gh api`.
+Read-only commands (`ls`, `grep`, `find`, `git log/diff/…`, `gh pr view/…`) are pre-approved in
+every repo: `permissions/claude-allow.json` is merged into user-level
+`~/.claude/settings.json` (rules merge additively across scopes; project denies still win), and
+`permissions/codex.rules` is an execpolicy file symlinked into `~/.codex/rules/` (additive —
+codex's own "always allow" amendments stay in `default.rules`).
+Deliberately excluded: test runners (project-level decision), `gh api` (can POST).
 
 Everything is symlinked, so the harnesses track this repo live (edit a SKILL.md, it's live everywhere).
+
+### Removed: RTK (Rust Token Killer)
+
+RTK used to be wired in here — a `PreToolUse` hook rewriting Bash commands (`git status` →
+`rtk git status`), a global-rules section telling other harnesses to prefix manually, and
+`rtk`-variant permission rules. It's gone as of 2026-07-30, per
+[Does "rtk" skill really cut agent tokens by 60–90%? We tested it](https://blog.jetbrains.com/ai/2026/07/rtk-claude-code-token-savings/):
+the measured result was a **median +7.6% cost increase** at low reasoning effort (p=0.004) and
+flat zero at high effort — not the advertised 60–90% savings. RTK compresses only ~20% of shell
+output, while Claude Code already truncates long results and cached input dominates the bill.
+Its own "tokens saved" counter measures compression ratio, not billing impact.
+
+Don't re-add it without paired-invoice evidence.
 
 ## Layout
 
 ```
 skills/            canonical skill tree — agentskills.io spec, one folder per skill
-GLOBAL-AGENTS.md   single source of truth for global rules (git conventions, RTK usage)
+GLOBAL-AGENTS.md   single source of truth for global rules (orientation docs, git conventions)
 ralph/             ralph-orchestrator global config, custom presets (design-doc, implement[-plus], tdd[-plus]), project template
 permissions/       pre-approved read-only commands: claude-allow.json (merged into
                    ~/.claude/settings.json) + codex.rules (execpolicy, symlinked)
