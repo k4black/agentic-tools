@@ -18,13 +18,10 @@ Re-run it any time: after `git pull`, after adding a skill, after installing a n
 | Claude Code | `~/.claude/skills/*` (symlinks) | `~/.claude/CLAUDE.md` → `GLOBAL-AGENTS.md` |
 | Codex CLI | `~/.codex/skills/*` + `~/.agents/skills/*` (symlinks) | `~/.codex/AGENTS.md` → `GLOBAL-AGENTS.md` |
 | OpenCode | reads `~/.claude/skills` + `~/.agents/skills` natively | `~/.config/opencode/AGENTS.md` → `GLOBAL-AGENTS.md` |
-| ralph-orchestrator | `~/.config/ralph/presets` → `ralph/presets/` | `~/.ralph/config.yml` → `ralph/config.yml` |
 
 Tool configuration is never manually-edited: Claude Code marketplaces/plugins go through the
-`claude plugin` CLI, and MCP servers (Dart/Flutter, ralph) through `claude mcp add` /
+`claude plugin` CLI, and the Dart/Flutter MCP server through `claude mcp add` /
 `codex mcp add` — so a fresh machine gets the full setup in one run.
-ralph-orchestrator (≥ 2.10) additionally gets a global config with repo-local skill injection
-and five custom hat-collection presets (see `ralph/README.md`).
 
 Read-only commands (`ls`, `grep`, `find`, `git log/diff/…`, `gh pr view/…`) are pre-approved in
 every repo: `permissions/claude-allow.json` is merged into user-level
@@ -48,12 +45,25 @@ Its own "tokens saved" counter measures compression ratio, not billing impact.
 
 Don't re-add it without paired-invoice evidence.
 
+### Unwired: ralph-orchestrator
+
+Also 2026-07-30: ralph is no longer wired into any harness — the `ralph` MCP server, the
+`ralph-orchestrator@ralph-orchestrator` plugin and its marketplace, and the
+`~/.ralph/config.yml` + `~/.config/ralph/presets` symlinks are all removed. The MCP server
+never connected (`ralph mcp` is a real subcommand on 2.10.1, but it failed health checks).
+
+Unlike RTK this is a *pause, not a deletion*: `ralph/` stays in the repo with its config, five
+hat-collection presets and project template, and the `install.sh` blocks are commented out
+rather than removed. To re-enable, uncomment every block marked `ralph (disabled)` (including
+the `ralph_supported()` helper) and re-run `./install.sh`. The `ralph` binary itself is
+untouched.
+
 ## Layout
 
 ```
 skills/            canonical skill tree — agentskills.io spec, one folder per skill
 GLOBAL-AGENTS.md   single source of truth for global rules (orientation docs, git conventions)
-ralph/             ralph-orchestrator global config, custom presets (design-doc, implement[-plus], tdd[-plus]), project template
+ralph/             ralph-orchestrator config, presets (design-doc, implement[-plus], tdd[-plus]), project template — UNWIRED, kept for later
 permissions/       pre-approved read-only commands: claude-allow.json (merged into
                    ~/.claude/settings.json) + codex.rules (execpolicy, symlinked)
 install.sh         the idempotent bootstrap

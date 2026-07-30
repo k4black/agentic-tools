@@ -7,8 +7,10 @@
 #                          (OpenCode reads ~/.claude/skills + ~/.agents/skills natively)
 #   GLOBAL-AGENTS.md    -> ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, ~/.config/opencode/AGENTS.md
 #   Claude plugins/MCP  -> installed via the claude/codex CLIs (never hand-edited configs)
-#   ralph/              -> ~/.ralph/config.yml + ~/.config/ralph/presets (ralph-orchestrator)
 #   permissions/        -> claude settings.json allow-rules merge + ~/.codex/rules/ symlink
+#
+# ralph-orchestrator wiring is COMMENTED OUT (2026-07-30) — unwired from all harnesses,
+# but ralph/ assets stay in the repo. Search "ralph (disabled)" to re-enable.
 
 set -euo pipefail
 
@@ -17,16 +19,17 @@ SKILLS_SRC="$REPO/skills"
 
 # --- helpers -----------------------------------------------------------------
 
-# ralph_supported: ralph >= 2.10 (split config: -H collections, backend_args).
-# Older monolithic-preset binaries would misread our assets — warn and skip.
-ralph_supported() {
-  command -v ralph >/dev/null 2>&1 || return 1
-  local v major minor
-  v="$(ralph --version 2>/dev/null | awk '{print $NF}')"
-  major="${v%%.*}"
-  minor="${v#*.}"; minor="${minor%%.*}"
-  [ "${major:-0}" -gt 2 ] || { [ "${major:-0}" -eq 2 ] && [ "${minor:-0}" -ge 10 ]; }
-}
+# ralph (disabled): ralph_supported gated every ralph block on ralph >= 2.10
+# (split config: -H collections, backend_args) — older monolithic-preset binaries
+# would misread our assets.
+# ralph_supported() {
+#   command -v ralph >/dev/null 2>&1 || return 1
+#   local v major minor
+#   v="$(ralph --version 2>/dev/null | awk '{print $NF}')"
+#   major="${v%%.*}"
+#   minor="${v#*.}"; minor="${minor%%.*}"
+#   [ "${major:-0}" -gt 2 ] || { [ "${major:-0}" -eq 2 ] && [ "${minor:-0}" -ge 10 ]; }
+# }
 
 # link <target> <linkpath>: idempotent symlink; backs up a pre-existing real file.
 link() {
@@ -85,9 +88,10 @@ if command -v claude >/dev/null 2>&1; then
   }
   add_marketplace "litestar" "litestar-org/litestar-skills"
   add_marketplace "elastic-agent-skills" "elastic/agent-skills"
-  if ralph_supported; then
-    add_marketplace "ralph-orchestrator" "mikeyobrien/ralph-orchestrator"
-  fi
+  # ralph (disabled):
+  # if ralph_supported; then
+  #   add_marketplace "ralph-orchestrator" "mikeyobrien/ralph-orchestrator"
+  # fi
 
   # legacy sources, superseded by this repo / dropped
   for legacy in kchernyshev-dotfiles apple-notes-mcp; do
@@ -119,16 +123,16 @@ if command -v claude >/dev/null 2>&1; then
     fi
   done
 
-  # ralph's own skills (ralph-hats, ralph-loop, ralph-docs) — only useful with ralph
-  if ralph_supported; then
-    plugin="ralph-orchestrator@ralph-orchestrator"
-    if grep -qF "$plugin" <<<"$installed"; then
-      echo "  $plugin ok"
-    else
-      claude plugin install "$plugin"
-      echo "  installed $plugin"
-    fi
-  fi
+  # ralph (disabled): ralph's own skills (ralph-hats, ralph-loop, ralph-docs)
+  # if ralph_supported; then
+  #   plugin="ralph-orchestrator@ralph-orchestrator"
+  #   if grep -qF "$plugin" <<<"$installed"; then
+  #     echo "  $plugin ok"
+  #   else
+  #     claude plugin install "$plugin"
+  #     echo "  installed $plugin"
+  #   fi
+  # fi
 else
   echo "claude CLI not installed — skipping plugin setup (install claude, then re-run)"
 fi
@@ -158,26 +162,32 @@ else
   echo "dart not installed — skipping Dart/Flutter MCP server"
 fi
 
-# ralph-orchestrator MCP server — drive ralph loops from Claude Code directly
-if ralph_supported && command -v claude >/dev/null 2>&1; then
-  if claude mcp list 2>/dev/null | grep -q '^ralph:'; then
-    echo "  claude: ralph ok"
-  else
-    claude mcp add --scope user ralph -- ralph mcp
-    echo "  claude: added ralph"
-  fi
-fi
+# ralph (disabled): ralph-orchestrator MCP server — drive ralph loops from Claude directly
+# if ralph_supported && command -v claude >/dev/null 2>&1; then
+#   if claude mcp list 2>/dev/null | grep -q '^ralph:'; then
+#     echo "  claude: ralph ok"
+#   else
+#     claude mcp add --scope user ralph -- ralph mcp
+#     echo "  claude: added ralph"
+#   fi
+# fi
 
-# --- 5. ralph-orchestrator: global config + shared presets --------------------
-
-if ralph_supported; then
-  echo "ralph global config + presets"
-  mkdir -p "$HOME/.ralph" "$HOME/.config/ralph"
-  link "$REPO/ralph/config.yml" "$HOME/.ralph/config.yml"
-  link "$REPO/ralph/presets" "$HOME/.config/ralph/presets"
-else
-  echo "ralph missing or < 2.10 — skipping (npm i -g @ralph-orchestrator/ralph-cli, then re-run)"
-fi
+# --- 5. ralph (disabled): global config + shared presets ----------------------
+#
+# Unwired 2026-07-30: the ralph MCP server never connected (`ralph mcp` is a valid
+# subcommand on 2.10.1, but the server failed health checks), and the loops weren't
+# earning their keep. ralph/ assets — config.yml, the five hat-collection presets,
+# project template — are deliberately KEPT in this repo. To re-enable: uncomment
+# every "ralph (disabled)" block (incl. ralph_supported() in helpers) and re-run.
+#
+# if ralph_supported; then
+#   echo "ralph global config + presets"
+#   mkdir -p "$HOME/.ralph" "$HOME/.config/ralph"
+#   link "$REPO/ralph/config.yml" "$HOME/.ralph/config.yml"
+#   link "$REPO/ralph/presets" "$HOME/.config/ralph/presets"
+# else
+#   echo "ralph missing or < 2.10 — skipping (npm i -g @ralph-orchestrator/ralph-cli, then re-run)"
+# fi
 
 # --- 6. permission allowlists: read-only commands -----------------------------
 
