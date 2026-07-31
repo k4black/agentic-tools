@@ -1,6 +1,6 @@
 ---
 name: ponytail
-description: Force the minimal solution that actually works — YAGNI, reuse what is already implemented, stdlib and native platform features before custom code, one line before fifty. Also reviews a diff or audits a whole repo for over-engineering.
+description: Force the minimal solution that actually works — YAGNI, reuse what is already implemented, stdlib and native platform features before custom code, one line before fifty. Also reviews a diff or audits a whole repo for over-engineering, including test-suite bloat — trivial, overlapping, over-complicated and parameterizable tests.
 argument-hint: "review | audit (default: apply the ladder for this session)"
 disable-model-invocation: true
 license: MIT
@@ -101,9 +101,15 @@ just less code, the physical world needs tuning a minimal model can't see.
 Lazy code without its check is unfinished. Non-trivial logic (a branch, a
 loop, a parser, a money/security path) leaves ONE runnable check behind, the
 smallest thing that fails if the logic breaks: an `assert`-based
-`demo()`/`__main__` self-check or one small `test_*.py`. No frameworks, no
-fixtures, no per-function suites unless asked. Trivial one-liners need no
-test, YAGNI applies to tests too.
+`demo()`/`__main__` self-check or one small `test_*.py`. Trivial one-liners
+need no test, YAGNI applies to tests too.
+
+Rung 5 applies to tests as well: a test framework the project *already*
+installs (pytest, jest, go test) is the lazy choice — use it, don't hand-roll
+a runner. Same for fixtures: reach for one when it's genuinely reused and
+makes the test read better, not for a single call site. What's still banned is
+scaffolding nobody asked for — a per-function suite, a fixture used once, a
+new test dependency.
 
 ## Findings tags
 
@@ -114,6 +120,36 @@ Shared by `review` and `audit`:
 - `native:` dependency or code doing what the platform already does. Name the feature.
 - `yagni:` abstraction with one implementation, config nobody sets, layer with one caller.
 - `shrink:` same logic, fewer lines. Show the shorter form.
+
+In test files, also:
+
+- `trivial:` asserts a getter, a constant, a default no branch reads, or that the framework works. Also the test with no assertion at all, which only checks nothing throws. Replacement: nothing.
+- `overlap:` the same path already covered by another test — typically a unit test fully subsumed by an integration test that exercises it. Name the survivor.
+- `untangle:` setup out of proportion to what's asserted: a shared fixture building more than any one test needs, mock returning mock, or expected values living in an external fixture/golden file instead of the test body. Inline what the test actually needs.
+- `merge:` near-identical tests differing only in data. Show the parameterized form (`@pytest.mark.parametrize`, table-driven `t.Run`, `test.each`, `@ParameterizedTest`).
+- `tautological:` the expected value is recomputed the way the code computes it, so it passes by construction and can never disagree. Replace with an independent literal, or delete.
+- `logic:` `if`/`switch`/loop/computation in a test body — a test must be obviously correct on inspection, without being debugged. Split it, or hard-code the expected value.
+
+### Before proposing any test deletion
+
+Two checks, both cheap. Coverage being equal after a cut is not the same as
+safety being equal, so don't skip them.
+
+1. **Provenance.** Grep the test name and nearby comments, and `git blame` /
+   `git log -S` it, for a bug, issue, incident or CVE reference. A test that
+   pins a past bug is a specification of a known failure mode — **not** a
+   duplicate, however trivial it looks. Keep it; at most rewrite it against the
+   public interface.
+2. **Name the survivor.** For `overlap:`, say which remaining test covers the
+   risk. Can't name one? It isn't overlap. And if breaking the code under test
+   leaves the suite green either way, the finding is `trivial:`, not `overlap:` —
+   a test that cannot fail was never protecting anything.
+
+`merge:` only when the assertion *shape* is identical and only the data varies.
+Diverging expectations or per-case branching stay separate tests — a table
+padded with `wantErr`-style flags is just `logic:` reintroduced. Always keep the
+case identifier in the name: `test_foo[3]` is strictly worse than five named
+tests.
 
 ## `/ponytail review` — the diff
 
@@ -137,8 +173,16 @@ considered whether all these validation rules are needed at this stage?"
 
 ✅ `L30-44: shrink: manual loop builds dict. dict(zip(keys, values)), 1 line.`
 
-End with the only metric that matters: `net: -<N> lines possible.` Nothing to
-cut: say `Lean already. Ship.` and stop.
+End with the metric that matters, production and tests on separate lines so a
+merge doesn't hide inside a line count:
+
+```
+net:   -<N> lines possible.
+tests: -<K> tests (<J> merged into <T> tables), -<N> lines.
+```
+
+Omit the `tests:` line when the diff touches no tests. Nothing to cut: say
+`Lean already. Ship.` and stop.
 
 ## `/ponytail audit` — the repo
 
@@ -148,8 +192,21 @@ Hunt for: deps the stdlib or platform already ships, single-implementation
 interfaces, factories with one product, wrappers that only delegate, files
 exporting one thing, dead flags and config, hand-rolled stdlib.
 
+In tests, hunt for: permanently skipped tests (`skip`/`xit`/`@Ignore`/`t.Skip`
+with no linked ticket — a silently dropped test nobody misses), whole test
+bodies differing only in literals, shared `setUp`/`beforeEach` fixtures whose
+fields most tests never read, assertions on `toString()`/serialized form, and
+full-equality assertions on big objects where one field is the point.
+
 One line per finding, ranked: `<tag> <what to cut>. <replacement>. [path]`.
-End with `net: -<N> lines, -<M> deps possible.` Nothing to cut: `Lean already. Ship.`
+End with the two bottom lines:
+
+```
+net:   -<N> lines, -<M> deps possible.
+tests: -<K> tests (<J> merged into <T> tables), -<N> lines.
+```
+
+Nothing to cut: `Lean already. Ship.`
 
 ## Boundaries
 
