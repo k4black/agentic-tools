@@ -13,6 +13,12 @@
 - If you feel that some skill is not up to date or miss some important context - 
   suggest user to update it.
 
+## Language
+
+- Write like Simplified Technical English (ASD-STE100): short sentences, one idea
+  each, plain words, active voice. No filler, no essays where a line does.
+- Use the project's Terminology vocabulary; refer to things by name, never bare ids.
+
 ## Git
 
 - Use Conventional Commits 1.0.0: `<type>[optional scope]: <description>` (e.g. `feat(lang): add Polish language`).

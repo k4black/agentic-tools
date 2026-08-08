@@ -146,7 +146,7 @@ The plan you approved is implemented. Review the diff.
 
 - Plan: `${PLAN_FILE_PATH}`  - Diff summary: `.critique-loop/<slug>-diff-summary.md`  - Commit range: `${PLAN_SHA}..HEAD`
 
-Run `git diff ${PLAN_SHA}..HEAD` and read the changed files. Verify: (a) implementation matches the plan; (b) no scope creep; (c) no bugs, regressions, or missed edge cases; (d) adequate test coverage.
+Run `git diff ${PLAN_SHA}..HEAD` and read the changed files. Verify: (a) implementation matches the plan; (b) no scope creep; (c) no bugs, regressions, or missed edge cases; (d) adequate test coverage. If you have the `code-review` skill, apply its two axes — standards (incl. dedup/simplification) and spec.
 
 Output format: numbered asks with file:line refs, ending with `VERDICT: APPROVE | CHANGES_REQUESTED | BLOCK`.
 
@@ -208,7 +208,7 @@ Other shapes: `HEAD` (uncommitted work), `<sha1>..<sha2>`, `<base>...HEAD`.
 ```
 You are the navigator in a cross-model code review. The driver has changes to review adversarially before shipping.
 
-Run `git diff ${REVIEW_RANGE}` and read the changed files. Probe for: bugs, regressions, missed edge cases; missing/inadequate tests; security, performance, correctness issues; scope creep or leftover debug code; simpler alternatives.
+Run `git diff ${REVIEW_RANGE}` and read the changed files. Probe for: bugs, regressions, missed edge cases; missing/inadequate tests; security, performance, correctness issues; scope creep or leftover debug code; simpler alternatives. If you have the `code-review` skill, apply its two axes — standards (incl. dedup/simplification) and spec.
 
 Output format: numbered asks with file:line refs, ending with `VERDICT: APPROVE | CHANGES_REQUESTED | BLOCK`.
 

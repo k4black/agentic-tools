@@ -31,6 +31,9 @@ and do not change the activation state.
 Once activated, ACTIVE EVERY RESPONSE. No drift back to over-building. Still
 active if unsure. Off only: "stop ponytail" / "normal mode".
 
+Sub-agents don't inherit this session's state: while active, every sub-agent
+you dispatch must be told in its prompt to load the ponytail skill first.
+
 ## The ladder
 
 Stop at the first rung that holds:
