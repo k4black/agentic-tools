@@ -1,0 +1,5 @@
+interface:
+  display_name: "Wayfinder"
+  short_description: "Chart huge work as a map of decision tickets"
+policy:
+  allow_implicit_invocation: false

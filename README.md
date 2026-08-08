@@ -62,7 +62,7 @@ untouched.
 
 ```
 skills/            canonical skill tree — agentskills.io spec, one folder per skill
-GLOBAL-AGENTS.md   single source of truth for global rules (orientation docs, git conventions)
+GLOBAL-AGENTS.md   single source of truth for global rules (orientation docs, language, git conventions)
 ralph/             ralph-orchestrator config, presets (design-doc, implement[-plus], tdd[-plus]), project template — UNWIRED, kept for later
 permissions/       pre-approved read-only commands: claude-allow.json (merged into
                    ~/.claude/settings.json) + codex.rules (execpolicy, symlinked)
@@ -77,8 +77,10 @@ install.sh         the idempotent bootstrap
 | `apple-notes` | Read/reorganize Apple Notes without stripping hyperlinks |
 | `apple-reminders` | Add/view/complete Apple Reminders |
 | `babysit-pr` | Drive a PR to merge-ready: fix CI, resolve bot review threads (gh-only) |
+| `code-review` | Two-axis diff review — Standards (repo docs + Fowler smell baseline + simplify/dedup) and Spec (vs the design doc/issue) — in parallel sub-agents |
 | `critique-loop` | Cross-model adversarial review (Codex/Cursor navigator), plan + code flows |
 | `design-doc` | Research → grill → write `docs/design/yyyy-MM-dd-<slug>.md` feature design doc |
+| `diagnosing-bugs` | Feedback-loop-first diagnosis for hard bugs: build a tight red-capable loop before any hypothesis |
 | `domain-modeling` | Maintain the project's Terminology section (domain glossary) in AGENTS.md |
 | `github-project-setup` | Harden a GitHub repo to one target state: squash-only merges, protected default branch (ruleset), Dependabot, PR-title lint (user-triggered) |
 | `grill-me` | Relentless interview to stress-test a plan until shared understanding |
@@ -86,7 +88,11 @@ install.sh         the idempotent bootstrap
 | `improve-agents-md` | Create/audit/compress a project's AGENTS.md/CLAUDE.md against the canonical structure, decide which areas earn nested files (user-triggered) |
 | `improve-codebase-architecture` | Scan for module-deepening opportunities, visual HTML report, grill through picks |
 | `ponytail` | Lazy senior dev mode — YAGNI ladder, stdlib/native before custom code, shortest diff; `review` (diff) and `audit` (repo) sub-flows (user-triggered) |
+| `prototype` | Throwaway prototype answering a design question: logic (single shareable HTML demo) or UI (radical variants behind a URL param) |
+| `research` | Background agent researching a question against primary sources, one cited .md file |
+| `resolving-merge-conflicts` | Resolve an in-progress merge/rebase from the primary sources of each conflict |
 | `test-driven-dev` | Test-driven development: red-green loop, pre-agreed seams, vertical slices |
+| `wayfinder` | Chart work too big for one session as a map of decision tickets (GitHub issues/Project or local `docs/plan/<slug>/`), resolved one per session (user-triggered) |
 
 Skills follow the [Agent Skills spec](https://agentskills.io/specification) (`SKILL.md` + optional
 `scripts/`, `references/`, `agents/openai.yaml` for Codex metadata), validated in CI
@@ -102,6 +108,7 @@ agreements to check when editing any skill:
 | `docs/design/yyyy-MM-dd-<slug>.md` | Written by `design-doc` (skill or ralph preset); input to `implement`/`tdd` loops. **Decisions are locked** — implementers don't re-open them, changes go through the doc first. Also the home for standalone hard-to-reverse decisions (no separate ADR system). Monorepos: may live per sub-project (`<sub>/docs/design/`) |
 | `CLAUDE.md` / `AGENTS.md` | Agent instructions in the `improve-agents-md` skill's canonical structure (CLAUDE.md is a symlink), including the **Terminology** section (glossary, maintained by `domain-modeling` — vocabulary source for `design-doc`, `test-driven-dev`, `improve-codebase-architecture`). Global layer comes from `GLOBAL-AGENTS.md` symlinks; read at session start, kept updated. Monorepos: nested files stack additively (nearest wins) but only for areas that earn one — see the skill's two gates |
 | `README.md`, `TODO.md` / `PROGRESS.md` | Orientation docs — read before exploring code, updated in place as part of any change (new service → README, progress → TODO/PROGRESS) |
+| `docs/plan/<slug>/` (`map.md` + ticket files) | `wayfinder`'s local-markdown medium — used when the project doesn't run on GitHub issues/Projects. Tickets resolve via `grill-me`, `prototype`, `research` |
 
 Cross-skill agreements: skills are the single source of truth for method (orkestration tools and other
 skills name-drop them, never copy); `grill-me` separates codebase **facts** (look up) from user
@@ -117,7 +124,10 @@ outgrows AGENTS.md — reference format:
 
 Credits: `babysit-pr` and `critique-loop` are adapted from
 [gzaripov/agent-skills](https://github.com/gzaripov/agent-skills) (MIT); `handoff`,
-`improve-codebase-architecture`, and `test-driven-dev` (upstream `tdd`) from
+`improve-codebase-architecture`, `test-driven-dev` (upstream `tdd`), `code-review`,
+`diagnosing-bugs`, `prototype`, `research`, `resolving-merge-conflicts`, and
+`wayfinder` (full flow, tracker ecosystem swapped for per-project medium:
+GitHub issues/Project or local markdown) from
 [mattpocock/skills](https://github.com/mattpocock/skills) (MIT); `ponytail` from
 [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) v4.8.4 (MIT) — the
 `ponytail`, `ponytail-review` and `ponytail-audit` skills collapsed into one user-triggered
