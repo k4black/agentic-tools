@@ -2,7 +2,7 @@
 name: ponytail
 description: Force the minimal solution that actually works — YAGNI, reuse what is already implemented, stdlib and native platform features before custom code, one line before fifty. Also reviews a diff or audits a whole repo for over-engineering, including test-suite bloat — trivial, overlapping, over-complicated and parameterizable tests.
 argument-hint: "review | audit (default: apply the ladder for this session)"
-disable-model-invocation: true
+disable-model-invocation: false
 license: MIT
 ---
 
